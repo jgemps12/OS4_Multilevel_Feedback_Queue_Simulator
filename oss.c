@@ -289,7 +289,7 @@ int main(int argc, char** argv) {
 	    }   
          }
 
-	 // Work with child process. Send [timeLimitForChildren] to worker.c to execute the child process.
+	 // Work with child process. Send [timeLimitForChildren] to user.c to execute the child process.
          if (processID == 0) {
             *secondsShared = systemClockSeconds;
             *nanosecondsShared = systemClockNano;
@@ -307,7 +307,7 @@ int main(int argc, char** argv) {
 
 
 	    // Run child processes.
-	    execl("./worker", "worker", randomizedTimeSeconds, randomizedTimeNanoseconds, NULL);
+	    execl("./user", "user", randomizedTimeSeconds, randomizedTimeNanoseconds, NULL);
 
             printf("ERROR in oss.c: the execl() function has failed. Terminating program.\n\n");
             exit(-1);
@@ -348,17 +348,17 @@ int main(int argc, char** argv) {
 	    // Parent process sends a message to a child process. Output printed to a logfile.
             if (msgsnd(messageQueueID, &sendBuffer, sizeof(messageBuffer) - sizeof(long int), 0) == -1) {
                printf("ERROR in oss.c: Problem with msgsnd() function.\n");
-               printf("Cannot send message to worker.c.\n\n");
+               printf("Cannot send message to user.c.\n\n");
 
                exit(-1);
             }
 
-            printf("OSS: Sending message to Worker #%d PID %ld at time %d:%lld\n", nextChild, sendBuffer.messageType, systemClockSeconds, systemClockNano);
-            fprintf(logOutputFP, "OSS: Sending message to Worker #%d PID %ld at time %d:%lld\n", nextChild, sendBuffer.messageType, systemClockSeconds, systemClockNano);
+            printf("OSS: Sending message to User #%d PID %ld at time %d:%lld\n", nextChild, sendBuffer.messageType, systemClockSeconds, systemClockNano);
+            fprintf(logOutputFP, "OSS: Sending message to User #%d PID %ld at time %d:%lld\n", nextChild, sendBuffer.messageType, systemClockSeconds, systemClockNano);
             fflush(logOutputFP);
    
 
-	    // Slow down program to prevent race conditions between times in Process Table and those analyzed in worker.c.
+	    // Slow down program to prevent race conditions between times in Process Table and those analyzed in user.c.
 	    // Also prevents multiple empty Process Tables from printing towards the program's end.
 	    int i; 
             for (i = 0; i < 20000000; i++) {
@@ -374,12 +374,12 @@ int main(int argc, char** argv) {
 	    // Parent process receives a message from a child process. Output printed to a logfile.
 	    if (msgrcv(messageQueueID, &receiveBuffer, sizeof(messageBuffer), processTable[nextChild].processID, 0) == -1) {
                printf("ERROR in oss.c: Problem with msgrcv() function.\n");
-               printf("Cannot receive message from worker.c.\n\n");
+               printf("Cannot receive message from user.c.\n\n");
 
                exit(-1);
 	    } 
-	    printf("OSS: Receiving message from Worker #%d PID %ld at time %d:%lld\n", nextChild, receiveBuffer.messageType, systemClockSeconds, systemClockNano);
-	    fprintf(logOutputFP, "OSS: Receiving message from Worker #%d PID %ld at time %d:%lld\n", nextChild, receiveBuffer.messageType, systemClockSeconds, systemClockNano);
+	    printf("OSS: Receiving message from User #%d PID %ld at time %d:%lld\n", nextChild, receiveBuffer.messageType, systemClockSeconds, systemClockNano);
+	    fprintf(logOutputFP, "OSS: Receiving message from User #%d PID %ld at time %d:%lld\n", nextChild, receiveBuffer.messageType, systemClockSeconds, systemClockNano);
             fflush(logOutputFP);
 
 	    processTable[nextChild].messagesSent++;
@@ -391,8 +391,8 @@ int main(int argc, char** argv) {
                //childrenActive--;
                 // nextLaunchTimeNano = determineNextLaunchNanoseconds(intervalInMSToLaunchChildren, systemNanoOnly);
 
-	       printf("**OSS: Worker #%d PID %ld is planning to terminate.**\n\n", nextChild, receiveBuffer.messageType);
-	       fprintf(logOutputFP, "**OSS: Worker #%d PID %ld is planning to terminate.**\n\n", nextChild, receiveBuffer.messageType);
+	       printf("**OSS: User #%d PID %ld is planning to terminate.**\n\n", nextChild, receiveBuffer.messageType);
+	       fprintf(logOutputFP, "**OSS: User #%d PID %ld is planning to terminate.**\n\n", nextChild, receiveBuffer.messageType);
                fflush(logOutputFP);
             }
 
@@ -626,11 +626,7 @@ void printProcessTable() {
       if (processTable[i].occupied == 1 && processTable[i].startNanoseconds >= 1000000) {
             printf("%d\t %d\t\t %d\t\t %d\t %ld\t %d\n", i, processTable[i].occupied, processTable[i].processID, processTable[i].startSeconds, processTable[i].startNanoseconds, processTable[i].messagesSent);
 	 }	
-	 
-        /* else {
-	    printf("%d\t %d\t\t %d\t\t %d\t %ld\t\t %d\n", i, processTable[i].occupied, processTable[i].processID, processTable[i].startSeconds, processTable[i].startNanoseconds, processTable[i].messagesSent);
-         } 
-      }*/
+
       else {
          printf("%d\t %d\t\t %d\t\t %d\t %ld\t\t %d\n", i, processTable[i].occupied, processTable[i].processID, processTable[i].startSeconds, processTable[i].startNanoseconds, processTable[i].messagesSent);
       }
