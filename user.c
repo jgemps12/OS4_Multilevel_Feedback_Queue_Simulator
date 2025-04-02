@@ -5,7 +5,7 @@
 */
 
 
-// The worker.c file works with CHILD processes.
+// The user.c file works with CHILD processes.
 // It prints out child and parent process IDs, as well as child process and termination times, to the user for each iteration.
 
 
@@ -53,7 +53,7 @@ int messageQueueID;
 key_t key;
 
 
-// Gathers logfile name from oss.c to validate ftok() function in worker.c (this file).
+// Gathers logfile name from oss.c to validate ftok() function in user.c (this file).
 int childProcessTimeSeconds;
 int childTerminationTimeSeconds;
 long int childProcessTimeNano;
@@ -114,29 +114,29 @@ int main(int argc, char** argv) {
 
    // Attempts to set up a message queue.
    if ((key = ftok(logfileFP, 1)) == -1) {
-      printf("ERROR in worker.c: problem with ftok() function.\n");
+      printf("ERROR in user.c: problem with ftok() function.\n");
       printf("Cannot access a key for message queue initialization.\n\n");
 
       exit(-1);
    }
 
    if ((messageQueueID = msgget(key, PERMISSIONS)) == -1) {
-      printf("ERROR in worker.c: problem with msgget() function.\n");
+      printf("ERROR in user.c: problem with msgget() function.\n");
       printf("Cannot acquire a message queue ID for initialization.\n\n");
 
       exit(-1);
    }
 
 
-   // If executing ./worker [timeLimitForChildren] [timeLimitNanoseconds], user must enter two integers after ./worker.
+   // If executing ./user [timeLimitForChildren] [timeLimitNanoseconds], user must enter two integers after ./user.
    // Otherwise, present error and terminate program.
    if (argc != 3) {
-      printf("ERROR in 'worker.c': You must enter ./worker followed by two integers.\n\n");
+      printf("ERROR in 'user.c': You must enter ./user followed by two integers.\n\n");
 
       printf("Integer 1: the maximum time limit for a child process (in seconds).\n");
       printf("Integer 2: the # of nanoseconds AFTER seconds time limit has been reached.\n\n");
 
-      printf("Example: ./worker 5 200000\n\n");
+      printf("Example: ./user 5 200000\n\n");
 
       exit(-1);
    }
@@ -155,7 +155,7 @@ int main(int argc, char** argv) {
 
 
    // Print starting message.
-   printf("WORKER PID: %d   PPID: %d  SysClockS: %d  SysClockNano: %ld  TermTimeS: %d  TermTimeNano: %ld ---Just starting\n", getpid(), getppid(), systemClockSeconds, systemClockNano, childTerminationTimeSeconds, childTerminationTimeNano);
+   printf("USER PID: %d   PPID: %d  SysClockS: %d  SysClockNano: %ld  TermTimeS: %d  TermTimeNano: %ld ---Just starting\n", getpid(), getppid(), systemClockSeconds, systemClockNano, childTerminationTimeSeconds, childTerminationTimeNano);
 
 
    // Keep track of how many times the do-while loop iterates.
@@ -165,8 +165,8 @@ int main(int argc, char** argv) {
    do {
       // Receives a message from the parent.
       if (msgrcv(messageQueueID, &receiveBuffer, sizeof(messageBuffer), getpid(), 0) == -1) {
-         printf("ERROR in worker.c: Problem with msgrcv() function.\n");
-         printf("Cannot receive message from worker.c.\n\n");
+         printf("ERROR in user.c: Problem with msgrcv() function.\n");
+         printf("Cannot receive message from user.c.\n\n");
 
          exit(-1);
       }
@@ -182,7 +182,7 @@ int main(int argc, char** argv) {
       int secondsRan = getElapsedTimeSeconds(initialSystemClockSecs, systemClockSeconds);
  
 
-      // Slow down program to prevent race conditions between Process Table and printf() message times (for oss.c and worker.c, respectively).
+      // Slow down program to prevent race conditions between Process Table and printf() message times (for oss.c and user.c, respectively).
       int i;
       for (i = 0; i < 10000000; i++) {
          //  Do nothing.
@@ -199,13 +199,13 @@ int main(int argc, char** argv) {
          snprintf(sendBuffer.stringData, sizeof(sendBuffer.stringData), "Message received to child. Now sending to parent. Child is now terminating.");
 
          if (msgsnd(messageQueueID, &sendBuffer, sizeof(messageBuffer) - sizeof(long int), 0) == -1) {
-            printf("ERROR in worker.c: Problem with msgsnd() function.\n");
+            printf("ERROR in user.c: Problem with msgsnd() function.\n");
             printf("Cannot send message to oss.c.\n\n");
 
             exit(-1);
          }
 
-         printf("WORKER PID: %d   PPID: %d  SysClockS: %d  SysClockNano: %ld  TermTimeS: %d  TermTimeNano: %ld ---Terminating\n", getpid(), getppid(), systemClockSeconds, systemClockNano, childTerminationTimeSeconds, childTerminationTimeNano);
+         printf("USER PID: %d   PPID: %d  SysClockS: %d  SysClockNano: %ld  TermTimeS: %d  TermTimeNano: %ld ---Terminating\n", getpid(), getppid(), systemClockSeconds, systemClockNano, childTerminationTimeSeconds, childTerminationTimeNano);
  
 	 break;
       }
@@ -218,14 +218,14 @@ int main(int argc, char** argv) {
 
 
          if (msgsnd(messageQueueID, &sendBuffer, sizeof(messageBuffer) - sizeof(long int), 0) == -1) {
-            printf("ERROR in worker.c: Problem with msgsnd() function.\n");
+            printf("ERROR in user.c: Problem with msgsnd() function.\n");
             printf("Cannot send message to oss.c.\n\n");
 
             exit(-1);
          }
 
 	 iterations++;
-         printf("WORKER PID: %d   PPID: %d  SysClockS: %d  SysClockNano: %ld  TermTimeS: %d  TermTimeNano: %ld ---%ld iteration(s) have passed since starting\n", getpid(), getppid(), systemClockSeconds, systemClockNano, childTerminationTimeSeconds, childTerminationTimeNano, iterations);
+         printf("USER PID: %d   PPID: %d  SysClockS: %d  SysClockNano: %ld  TermTimeS: %d  TermTimeNano: %ld ---%ld iteration(s) have passed since starting\n", getpid(), getppid(), systemClockSeconds, systemClockNano, childTerminationTimeSeconds, childTerminationTimeNano, iterations);
          
       }
    }
