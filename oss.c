@@ -61,11 +61,15 @@ char *logfileFP = (char *)shmat(logfileShmid, 0, 0);
 
 // A process table holds information about each child process.
 struct PCB {
-   int occupied;                        // Is the entry in the process table empty (0) or full (1)?
-   pid_t processID;                     // Child's process ID.
-   int startSeconds;                    // Time when a process forked (in seconds).
-   long int startNanoseconds;           // Time when a process forked (in nanoseconds).
-   int messagesSent;                    // # of messages sent by parent process for a child.
+   int occupied;                            // Is the entry in the process table empty (0) or full (1)?
+   pid_t processID;                         // Child's process ID.
+   int startSeconds;                        // Time when a process FORKED (in seconds).
+   long int startNanoseconds;               // Time when a process FORKED (in nanoseconds).
+   int serviceTimeSeconds;                  // Total time when a process was SCHEDULED (in seconds).
+   long int serviceTimeNanoseconds;         // Total time when a process was SCHEDULED (in nanoseconds).
+   int eventWaitSeconds;                    // Time when a process becomes UNBLOCKED (in seconds).
+   long int eventWaitNanoseconds;           // Time when a process becomes UNBLOCKED (in nanoseconds).
+   int blocked;                             // Is the process blocked (1) or unblocked (0)?
 };
 struct PCB processTable[20];
 
@@ -382,7 +386,7 @@ int main(int argc, char** argv) {
 	    fprintf(logOutputFP, "OSS: Receiving message from User #%d PID %ld at time %d:%lld\n", nextChild, receiveBuffer.messageType, systemClockSeconds, systemClockNano);
             fflush(logOutputFP);
 
-	    processTable[nextChild].messagesSent++;
+	   // processTable[nextChild].messagesSent++;
 
 
 	    // If a child process will end, output in console and logfile that it will do so.
@@ -587,7 +591,12 @@ int addToProcessTable(pid_t pid) {
          processTable[i].processID = pid;
          processTable[i].startSeconds = systemClockSeconds;
          processTable[i].startNanoseconds = systemClockNano;
-	 processTable[i].messagesSent = 0;
+	 processTable[i].serviceTimeSeconds = 9999;
+	 processTable[i].serviceTimeNanoseconds = 8888;
+	 processTable[i].eventWaitSeconds = 7777;
+	 processTable[i].eventWaitNanoseconds = 6666;
+	 processTable[i].blocked = 5555;
+
 
 	 if (systemClockNano == oneBillionNanoseconds) {
             processTable[i].startSeconds++;
@@ -608,7 +617,11 @@ void removeFromProcessTable(pid_t pid) {
          processTable[i].processID = 0;
          processTable[i].startSeconds = 0;
          processTable[i].startNanoseconds = 0;
-         processTable[i].messagesSent = 0;
+         processTable[i].serviceTimeSeconds = 0;
+         processTable[i].serviceTimeNanoseconds = 0;
+         processTable[i].eventWaitSeconds = 0;
+         processTable[i].eventWaitNanoseconds = 0;
+         processTable[i].blocked = 0;
 
          break;
       }
@@ -617,20 +630,38 @@ void removeFromProcessTable(pid_t pid) {
 void printProcessTable() {
    printf("\nOSS PID: %d  SysClockS: %d  SysClockNano: %lld\n", getpid(), systemClockSeconds, systemClockNano);
    printf("Process Table:\n");
-   printf("Entry\t Occupied\t PID\t\t StartS\t StartN\t\t MessagesSent\n");
+   printf("Entry\t Occupied\t PID\t\t StartS\t StartN\t\t ServiceS\t ServiceN\t EventWaitS\t EventWaitN\t Blocked\n");
 
    int i;
 
+  
    for (i = 0; i < 20; i++) {
-      // If column 5 (startNanoseconds) has a large number, reduce tabbing.
-      if (processTable[i].occupied == 1 && processTable[i].startNanoseconds >= 1000000) {
-            printf("%d\t %d\t\t %d\t\t %d\t %ld\t %d\n", i, processTable[i].occupied, processTable[i].processID, processTable[i].startSeconds, processTable[i].startNanoseconds, processTable[i].messagesSent);
-	 }	
-
-      else {
-         printf("%d\t %d\t\t %d\t\t %d\t %ld\t\t %d\n", i, processTable[i].occupied, processTable[i].processID, processTable[i].startSeconds, processTable[i].startNanoseconds, processTable[i].messagesSent);
+      // Prints first 3 columns (Entry, Occupied, PID).
+      printf("%d\t %d\t\t %d\t", i, processTable[i].occupied, processTable[i].processID);
+      if (processTable[i].occupied == 0) {
+         printf("\t");
       }
 
+      // Prints columns 4 and 5 (StartS, StartN).
+      printf(" %d\t %ld\t", processTable[i].startSeconds, processTable[i].startNanoseconds);
+      if (processTable[i].startNanoseconds < 1000000) {
+         printf("\t");
+      }
+      
+      // Prints columns 6 and 7 (ServiceS, ServiceN).
+      printf(" %d\t\t %ld\t", processTable[i].serviceTimeSeconds, processTable[i].serviceTimeNanoseconds);
+      if (processTable[i].serviceTimeNanoseconds < 1000000) {
+         printf("\t");
+      }
+
+      // Prints columns 8 and 9 (EventWaitS, EventWaitN).
+      printf(" %d\t\t %ld\t", processTable[i].eventWaitSeconds, processTable[i].eventWaitNanoseconds);
+      if (processTable[i].eventWaitNanoseconds < 1000000) {
+         printf("\t");
+      }
+
+      // Prints column 10 (Blocked--the final column).
+      printf(" %d\n", processTable[i].blocked);
    }
 
    printf("\n");
