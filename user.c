@@ -54,44 +54,15 @@ int messageQueueID;
 key_t key;
 
 
-// Gathers logfile name from oss.c to validate ftok() function in user.c (this file).
-int childProcessTimeSeconds;
-int childTerminationTimeSeconds;
-long int childProcessTimeNano;
-long int childTerminationTimeNano;
-
-
 // Logfile pointer.
 char *logfileFP = NULL;
 
 
 // Function prototypes.
 void initializeMessageQueue();
+int determineProcessSelection(int);
 void sendMessageToOSS();
 void receiveMessageFromOSS();
-
-int getTerminationTimeSeconds (int processSeconds, int systemClockSeconds) {
-   return processSeconds + systemClockSeconds;
-}
-
-
-// The point in simulated system time when child terminates.
-long int getTerminationTimeNano (long int processNanoseconds, long int systemClockNano, int *termSeconds) {
-   long int terminationNano = processNanoseconds + systemClockNano;
-   long int oneBillionSeconds = 1000000000;
-   
-   while (terminationNano >= oneBillionSeconds) {
-      (*termSeconds)++;
-      terminationNano -= oneBillionSeconds;
-   }
-
-   return terminationNano;
-}
-
-// Amount of time that child process stays in system.
-int getElapsedTimeSeconds (int startingTimeSeconds, int currentTimeSeconds) {
-   return currentTimeSeconds - startingTimeSeconds;
-}
 
 
 int main(int argc, char** argv) {
@@ -129,35 +100,8 @@ int main(int argc, char** argv) {
    initializeMessageQueue();
 
 
-   // If executing ./user [timeLimitForChildren] [timeLimitNanoseconds], user must enter two integers after ./user.
-   // Otherwise, present error and terminate program.
-   if (argc != 3) {
-      printf("ERROR in 'user.c': You must enter ./user followed by two integers.\n\n");
-
-      printf("Integer 1: the maximum time limit for a child process (in seconds).\n");
-      printf("Integer 2: the # of nanoseconds AFTER seconds time limit has been reached.\n\n");
-
-      printf("Example: ./user 5 200000\n\n");
-
-      exit(-1);
-   }
-
-
-   // Store user input that specifies the amount of time that the loop below will iterate.
-   if (argc == 3) { 
-      childProcessTimeSeconds = atoi(argv[1]);
-      childProcessTimeNano = atoi(argv[2]);
-   }
-
-
-   // Determines the system time that the child process should terminate.
-   childTerminationTimeSeconds = getTerminationTimeSeconds(childProcessTimeSeconds, initialSystemClockSecs);
-   childTerminationTimeNano = getTerminationTimeNano(childProcessTimeNano, initialSystemClockNano, &childTerminationTimeSeconds);
-
-
-  
    // Print starting message.
-   printf("USER PID: %d   PPID: %d  SysClockS: %d  SysClockNano: %ld  TermTimeS: %d  TermTimeNano: %ld ---Just starting\n", getpid(), getppid(), systemClockSeconds, systemClockNano, childTerminationTimeSeconds, childTerminationTimeNano);
+   printf("USER PID: %d   PPID: %d  SysClockS: %d  SysClockNano: %ld ---Just starting\n", getpid(), getppid(), systemClockSeconds, systemClockNano);
 
 
    // Keep track of how many times the do-while loop iterates.
@@ -178,7 +122,7 @@ int main(int argc, char** argv) {
 
       systemClockNano = *sharedNanoseconds;
 
-      int secondsRan = getElapsedTimeSeconds(initialSystemClockSecs, systemClockSeconds);
+  //    int secondsRan = getElapsedTimeSeconds(initialSystemClockSecs, systemClockSeconds);
  
 
       // Slow down program to prevent race conditions between Process Table and printf() message times (for oss.c and user.c, respectively).
@@ -188,25 +132,15 @@ int main(int argc, char** argv) {
       }
 
       probabilityValue = rand() % (100 + 1);
-
-      if (probabilityValue >= 1 && probabilityValue <= 94) {
-         processSelection = 1;
-      }
-      else if (probabilityValue >= 95 && probabilityValue <= 99) {
-         processSelection = 2;
-      }
-      else if (probabilityValue == 100) {
-         processSelection = 3;
-      }
-
+      processSelection = determineProcessSelection(probabilityValue);
+  
       printf("probabilityValue: %d\n", probabilityValue);
       printf("processSelection: %d\n", processSelection);
 
-      // If a child is about to terminate, print an exit message.
-     // if (systemClockSeconds >= childTerminationTimeSeconds && 
-         //   (systemClockSeconds > childTerminationTimeSeconds || systemClockNano >= childTerminationTimeNano)) {
-      switch (processSelection) {
-         case 1:
+      
+      switch (processSelection) {       
+	 // If child process runs for its ENTIRE time quantum.
+	 case 1:
             sendBuffer.messageType = getpid();
             sendBuffer.quantumData = 10000000;
 
@@ -215,11 +149,14 @@ int main(int argc, char** argv) {
             printf("\nsendBuffer.quantumData (from user.c): %ld\n", sendBuffer.quantumData);
             iterations++;
          
-	    printf("USER PID: %d   PPID: %d  SysClockS: %d  SysClockNano: %ld  TermTimeS: %d  TermTimeNano: %ld ---%ld iteration(s) have passed since starting\n", getpid(), getppid(), systemClockSeconds, systemClockNano, childTerminationTimeSeconds, childTerminationTimeNano, iterations);
+	    printf("USER PID: %d   PPID: %d  SysClockS: %d  SysClockNano: %ld ---%ld iteration(s) \n", getpid(), getppid(), systemClockSeconds, systemClockNano, iterations);
 
 	    break;
 	 
+
+	 // If child process runs for PART of its time quantum, but then becomes interrupted and BLOCKED.
 	 case 2:
+
 	    timeQuantumFraction = rand() % (99 + 1);
 
             sendBuffer.messageType = getpid();
@@ -230,11 +167,12 @@ int main(int argc, char** argv) {
             printf("\nsendBuffer.quantumData (from user.c): %ld\n", sendBuffer.quantumData);
             iterations++;
 
-            printf("USER PID: %d   PPID: %d  SysClockS: %d  SysClockNano: %ld  TermTimeS: %d  TermTimeNano: %ld ---%ld iteration(s) have passed since starting\n", getpid(), getppid(), systemClockSeconds, systemClockNano, childTerminationTimeSeconds, childTerminationTimeNano, iterations);
+            printf("USER PID: %d   PPID: %d  SysClockS: %d  SysClockNano: %ld  ---%ld iteration(s) have passed since starting\n", getpid(), getppid(), systemClockSeconds, systemClockNano, iterations);
 
             break;
 
 
+	 // If child process runs for PART of its time quantum, but then becomes TERMINATED.
 	 case 3:
             timeQuantumFraction = rand() % (99 + 1);
 
@@ -246,7 +184,7 @@ int main(int argc, char** argv) {
 
             printf("\n\nsendBuffer.quantumData (from user.c): %ld\n\n", sendBuffer.quantumData);
 
-            printf("USER PID: %d   PPID: %d  SysClockS: %d  SysClockNano: %ld  TermTimeS: %d  TermTimeNano: %ld ---Terminating\n", getpid(), getppid(), systemClockSeconds, systemClockNano, childTerminationTimeSeconds, childTerminationTimeNano);
+            printf("USER PID: %d   PPID: %d  SysClockS: %d  SysClockNano: %ld  ---Terminating\n", getpid(), getppid(), systemClockSeconds, systemClockNano);
 
 	    
 	    break;
@@ -254,34 +192,6 @@ int main(int argc, char** argv) {
       if (processSelection == 3) {
          break;
       }
-/*
-      if (iterations >= 10) {
-	 sendBuffer.messageType = getpid();
-         sendBuffer.quantumData = -10000000;
-
-         snprintf(sendBuffer.stringData, sizeof(sendBuffer.stringData), "Message received to child. Now sending to parent. Child is now terminating.");
-	 sendMessageToOSS();
-
-	 printf("\n\nsendBuffer.quantumData (from user.c): %ld\n\n", sendBuffer.quantumData);
-
-         printf("USER PID: %d   PPID: %d  SysClockS: %d  SysClockNano: %ld  TermTimeS: %d  TermTimeNano: %ld ---Terminating\n", getpid(), getppid(), systemClockSeconds, systemClockNano, childTerminationTimeSeconds, childTerminationTimeNano);
- 
-	 break;
-      }
-
-
-      // If a child is still running, print a progress message with # of iterations.
-      else {
-         sendBuffer.messageType = getpid();
-         sendBuffer.quantumData = 10000000;
-
-	 sendMessageToOSS();
-
-  	 printf("\n\nsendBuffer.quantumData (from user.c): %ld\n\n", sendBuffer.quantumData); 
-	 iterations++;
-         printf("USER PID: %d   PPID: %d  SysClockS: %d  SysClockNano: %ld  TermTimeS: %d  TermTimeNano: %ld ---%ld iteration(s) have passed since starting\n", getpid(), getppid(), systemClockSeconds, systemClockNano, childTerminationTimeSeconds, childTerminationTimeNano, iterations);
-         
-      }*/
    }
    while (1);
   
@@ -312,6 +222,30 @@ void initializeMessageQueue() {
 
       exit(-1);
    }
+}
+
+
+// Randomly decides option 1, 2, or 3 based on probability.
+int determineProcessSelection (int probabilityValue) {
+   int selection;                            
+
+   // Process runs full time quantum.
+   if (probabilityValue >= 1 && probabilityValue <= 94) {
+      selection = 1;
+   }
+
+   // Process runs part of quantum, but gets blocked.
+   else if (probabilityValue >= 95 && probabilityValue <= 99) {
+      selection = 2;
+   }
+
+   // Process runs part of quantum, but gets terminated.
+   else if (probabilityValue == 100) {
+      selection = 3;
+   }
+
+   
+   return selection;
 }
 
 
