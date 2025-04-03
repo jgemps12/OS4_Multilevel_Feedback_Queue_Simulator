@@ -43,9 +43,10 @@
 #define PERMISSIONS 0644
 
 
-// Initializes a log file to store message queue information.
+// Initializes a log file (and a file pointer) to store message queue information.
 char logfile[105] = "logfile.txt";
 char suffix[] = ".txt";
+FILE *logOutputFP = NULL;
 
 
 // Creates and attaches two shared memory identifiers (plus one for a log file).
@@ -78,7 +79,7 @@ struct PCB processTable[20];
 typedef struct messageBuffer {
    long int messageType;
    char stringData[100];
-   int integerData;
+   long int quantumData;
 } messageBuffer;
 
 
@@ -90,6 +91,7 @@ key_t key;
 
 
 // Places nanosecond values into variables for easier code readability.
+long int oneMillionNanoseconds = 1000000;
 long int halfBillionNanoseconds = 500000000;
 long int oneBillionNanoseconds = 1000000000;
 long int oneQuarterSecond = 250000000;
@@ -116,6 +118,8 @@ int currentChildIndex = 0;
 // Function prototypes.
 void checkForOptargEntryError(int, char []);
 void checkForSimulExceedsProcError(int, int);
+void initializeLogfile();
+void initializeMessageQueue();
 long long int incrementClock(int *, long long int *, int);
 long long int convertSystemTimeToNanosecondsOnly (int *, long long int *); 
 int randomizeChildSecondsLimit(int);
@@ -125,6 +129,8 @@ int addToProcessTable(pid_t);
 void removeFromProcessTable(pid_t);
 void printProcessTable();
 void printHelpMessage();
+void detachAndClearSharedMemory();
+void removeMessageQueue();
 void periodicallyTerminateProgram(int);
 
 
@@ -134,9 +140,17 @@ int main(int argc, char** argv) {
    strcpy(logfileFP, logfile);
 
    // If user does not input the arguments corresponding to variables below, assign default values.
-   int proc = 1;
+  
+   // **Should eventually be 100.**
+   int proc = 6;
+
+   // **Should eventually be 18.**
    int simul = 1;
+
+   // **Should not exist. user.c decides when a child terminates by selecting Option #3.**
    int timeLimitForChildren = 1;
+
+   // **Should be a random interval by using variables maxTimeBetweenNewProcsSecs and maxTimeBetweenNewProcsNS.**
    int intervalInMSToLaunchChildren = 500;
    
    // Copies the default log file name into shared memory.
@@ -144,11 +158,11 @@ int main(int argc, char** argv) {
 
    // If user puts invalid values for opt arguments, one of these strings will be passed into 'checkForOptargError()'.
    // This will help state the option in which the error occurred while trying to execute './oss'.
-   char procName[] = "-n [proc]";
+ /*  char procName[] = "-n [proc]";
    char simulName[] = "-s [simul]";
    char timeLimitName[] = "-t [timeLimitForChildren]";
    char intervalName[] = "-i [intervalInMSToLaunchChildren]";
-   char logfileName[] = "-f [logfile]";
+  */ char logfileName[] = "-f [logfile]";
 
    
    while ((opt = getopt(argc, argv, "hn:s:t:i:f:")) != -1) {
@@ -157,7 +171,7 @@ int main(int argc, char** argv) {
             printHelpMessage();
 
 	    break;
-
+/*
          case 'n':
             proc = atoi(optarg);
 	    checkForOptargEntryError(proc, procName);
@@ -185,7 +199,7 @@ int main(int argc, char** argv) {
             currentLaunchTimeNano = nextLaunchTimeNano;
 
 	    break;
-
+*/
 	 case 'f':
 	    char basename[100];
 
@@ -226,31 +240,18 @@ int main(int argc, char** argv) {
    *nanosecondsShared = 0;
 
 
-   // Creates .txt file to store message update information from oss.c (this file).
-   FILE *logOutputFP = fopen(logfile, "w");
-   
-   if (logOutputFP == NULL) {
-      printf("ERROR in oss.c: cannot create a log file named '%s'", logfile);
+   // Time quanta for each queue level (10, 20, and 40 ms respectively).
+   long int highPriorityQuantum = 10 * oneMillionNanoseconds;
+   long int mediumPriorityQuantum = 20 * oneMillionNanoseconds;
+   long int lowPriorityQuantum = 40 * oneMillionNanoseconds;
 
-      exit(-1);
-   }
+
+   // Creates .txt file to store message update information from oss.c (this file).
+   initializeLogfile();
 
 
    // Attempts to set up a message queue.
-   if ((key = ftok(logfile, 1)) == -1) {
-      printf("ERROR in oss.c: problem with ftok() function.\n");
-      printf("Cannot access a key for message queue initialization.\n\n");
-
-      exit(-1);
-   }
-
-   if ((messageQueueID = msgget(key, PERMISSIONS | IPC_CREAT)) == -1) {
-      printf("ERROR in oss.c: problem with msgget() function.\n");
-      printf("Cannot acquire a message queue ID for initialization.\n\n");
-
-      exit(-1);
-   }
-   printf("Message queue is now set up.\n\n");
+   initializeMessageQueue();
 
 
    // Signal handler for terminating program after 60 real-life seconds.
@@ -287,7 +288,7 @@ int main(int argc, char** argv) {
                (systemNanoOnly - nextLaunchTimeNano >= 0)) { 
 	     
 	       processID = fork();
-              
+             
 	       nextLaunchTimeNano = determineNextLaunchNanoseconds(intervalInMSToLaunchChildren, systemNanoOnly);
 	       break;
 	    }   
@@ -309,7 +310,6 @@ int main(int argc, char** argv) {
 	    sprintf(randomizedTimeSeconds, "%d", randomSeconds);
 	    sprintf(randomizedTimeNanoseconds, "%ld", randomNanoseconds);
 
-
 	    // Run child processes.
 	    execl("./user", "user", randomizedTimeSeconds, randomizedTimeNanoseconds, NULL);
 
@@ -324,6 +324,11 @@ int main(int argc, char** argv) {
             childrenActive++;
             totalChildrenLaunched++;
 
+	    printf("OSS: Generating process with PID %d and putting it in queue 0 ", processID);
+            printf("at time %d:%lld\n", systemClockSeconds, systemClockNano);
+            fprintf(logOutputFP, "OSS: Generating process with PID %d and putting it in queue 0 ", processID);
+            fprintf(logOutputFP, "at time %d:%lld\n", systemClockSeconds, systemClockNano);
+
             if (addToProcessTable(processID) == -1) {
                printf("ERROR in oss.c: Process Control Block (PCB) table is full.\n");
 	       printf("Cannot add PID %d\n", processID);
@@ -333,9 +338,8 @@ int main(int argc, char** argv) {
 
 
       // For-loop acts as a Round Robin scheduling mechanism to determine which child should receive the next message from the parent.
-      for (nextChild = 0; nextChild < totalChildrenLaunched; nextChild++) {	 
+      for (nextChild = 0; nextChild < totalChildrenLaunched; nextChild++) {	       
 	 
-	      
 	 // Print process table for every half second of simulated system time.
          if ((systemClockNano == halfBillionNanoseconds || systemClockNano == 0)  && (nextChild == 0)) {
             printProcessTable();
@@ -345,8 +349,10 @@ int main(int argc, char** argv) {
          if (processTable[nextChild].occupied == 1) {	    
 	    // A buffer stores information about what will be sent to a child.
             sendBuffer.messageType = processTable[nextChild].processID;
-            sendBuffer.integerData = processTable[nextChild].occupied;
-            snprintf(sendBuffer.stringData, sizeof(sendBuffer.stringData), "Message sent to child %d again. Child is still running.", nextChild);
+            
+	    // ** 10 ms time quantum sent to child.
+	    sendBuffer.quantumData = highPriorityQuantum;   
+	    snprintf(sendBuffer.stringData, sizeof(sendBuffer.stringData), "Message sent to child %d again. Child is still running.", nextChild);
 
 
 	    // Parent process sends a message to a child process. Output printed to a logfile.
@@ -356,6 +362,8 @@ int main(int argc, char** argv) {
 
                exit(-1);
             }
+  
+	    printf("\n\nsendBuffer.quantumData (from oss.c): %ld\n\n", sendBuffer.quantumData);
 
             printf("OSS: Sending message to User #%d PID %ld at time %d:%lld\n", nextChild, sendBuffer.messageType, systemClockSeconds, systemClockNano);
             fprintf(logOutputFP, "OSS: Sending message to User #%d PID %ld at time %d:%lld\n", nextChild, sendBuffer.messageType, systemClockSeconds, systemClockNano);
@@ -372,7 +380,7 @@ int main(int argc, char** argv) {
 
             // Another buffer stores info about what the parent receives from a child.
             receiveBuffer.messageType = processTable[nextChild].processID;
-            receiveBuffer.integerData = processTable[nextChild].occupied;
+            receiveBuffer.quantumData = highPriorityQuantum;
 
  		  
 	    // Parent process receives a message from a child process. Output printed to a logfile.
@@ -382,6 +390,10 @@ int main(int argc, char** argv) {
 
                exit(-1);
 	    } 
+
+            printf("\n\nreceiveBuffer.quantumData (from oss.c): %ld\n\n", receiveBuffer.quantumData);
+
+
 	    printf("OSS: Receiving message from User #%d PID %ld at time %d:%lld\n", nextChild, receiveBuffer.messageType, systemClockSeconds, systemClockNano);
 	    fprintf(logOutputFP, "OSS: Receiving message from User #%d PID %ld at time %d:%lld\n", nextChild, receiveBuffer.messageType, systemClockSeconds, systemClockNano);
             fflush(logOutputFP);
@@ -390,14 +402,16 @@ int main(int argc, char** argv) {
 
 
 	    // If a child process will end, output in console and logfile that it will do so.
-	    if (receiveBuffer.integerData == 0) {
+	    if (receiveBuffer.quantumData < 0) {
 	       removeFromProcessTable(receiveBuffer.messageType);
                //childrenActive--;
-                // nextLaunchTimeNano = determineNextLaunchNanoseconds(intervalInMSToLaunchChildren, systemNanoOnly);
+               //nextLaunchTimeNano = determineNextLaunchNanoseconds(intervalInMSToLaunchChildren, systemNanoOnly);
 
 	       printf("**OSS: User #%d PID %ld is planning to terminate.**\n\n", nextChild, receiveBuffer.messageType);
 	       fprintf(logOutputFP, "**OSS: User #%d PID %ld is planning to terminate.**\n\n", nextChild, receiveBuffer.messageType);
                fflush(logOutputFP);
+
+	    
             }
 
 
@@ -440,32 +454,14 @@ int main(int argc, char** argv) {
       }
    }
    printProcessTable();
-
-
+   
    fclose(logOutputFP);
-
-
-   // Detach from and clear shared memory.
-   shmdt(secondsShared);
-   shmdt(nanosecondsShared);
-   shmdt(logfileFP);
-   shmctl(secondsShmid, IPC_RMID, NULL);
-   shmctl(nanoShmid, IPC_RMID, NULL);
-   shmctl(logfileShmid, IPC_RMID, NULL);
-
-   // Remove the message queue.
-   if (msgctl(messageQueueID, IPC_RMID, NULL) == -1) {
-      printf("ERROR in oss.c: problem with msgctl() function.\n");
-      printf("Cannot delete or remove message queue.\n\n");
-
-      exit(-1);
-   }
-
+   detachAndClearSharedMemory();
+   removeMessageQueue();
+  
 
    return EXIT_SUCCESS;
 }
-
-
 
 
 // Displays error messages based on 'optarg' arguments.
@@ -498,6 +494,36 @@ void checkForSimulExceedsProcError(int simulProcesses, int totalProcesses) {
 
       exit(-1);
    }
+}
+
+
+// Create a logfile for process output.
+void initializeLogfile() {
+   logOutputFP = fopen(logfile, "w");
+
+   if (logOutputFP == NULL) {
+      printf("ERROR in oss.c: cannot create a log file named '%s'", logfile);
+
+      exit(-1);
+   }
+}
+
+
+void initializeMessageQueue() {
+   if ((key = ftok(logfile, 1)) == -1) {
+      printf("ERROR in oss.c: problem with ftok() function.\n");
+      printf("Cannot access a key for message queue initialization.\n\n");
+
+      exit(-1);
+   }
+
+   if ((messageQueueID = msgget(key, PERMISSIONS | IPC_CREAT)) == -1) {
+      printf("ERROR in oss.c: problem with msgget() function.\n");
+      printf("Cannot acquire a message queue ID for initialization.\n\n");
+
+      exit(-1);
+   }
+   printf("Message queue is now set up.\n\n");
 }
 
 
@@ -701,6 +727,26 @@ void printHelpMessage() {
 }
 
 
+// Clean memory segments and message queue.
+void detachAndClearSharedMemory () {
+   shmdt(secondsShared);
+   shmdt(nanosecondsShared);
+   shmdt(logfileFP);
+   shmctl(secondsShmid, IPC_RMID, NULL);
+   shmctl(nanoShmid, IPC_RMID, NULL);
+   shmctl(logfileShmid, IPC_RMID, NULL);
+}
+
+void removeMessageQueue() {
+   if (msgctl(messageQueueID, IPC_RMID, NULL) == -1) {
+      printf("ERROR in oss.c: problem with msgctl() function.\n");
+      printf("Cannot delete or remove message queue.\n\n");
+
+      exit(-1);
+   }
+}
+
+
 // Gracefully terminates program after 60 real life seconds.
 void periodicallyTerminateProgram(int signal) {
    printf("SIGALRM in oss.c; This program has ran for 60 seconds.\n");
@@ -720,29 +766,21 @@ void periodicallyTerminateProgram(int signal) {
       }
    }
    printf("\nChild process termination complete.\n");
+
+   
+   // Shared memory operations.
    printf("Now freeing shared memory...\n");
-
-  
-   // Detach from and clear shared memory.
-   shmdt(secondsShared);
-   shmdt(nanosecondsShared);
-   shmdt(logfileFP);
-   shmctl(secondsShmid, IPC_RMID, NULL);
-   shmctl(nanoShmid, IPC_RMID, NULL);
-   shmctl(logfileShmid, IPC_RMID, NULL);
-
+   detachAndClearSharedMemory();
    printf("\nShared memory detachment and deletion complete.\n");
+   
+
+   // Queue removal operations.
    printf("Now deleting the message queue...\n");
-
-   // Remove the message queue.
-   if (msgctl(messageQueueID, IPC_RMID, NULL) == -1) {
-      printf("ERROR in oss.c: problem with msgctl() function.\n");
-      printf("Cannot delete or remove message queue.\n\n");
-
-      exit(-1);
-   }
-
+   removeMessageQueue();
    printf("\nMessage queue removal and deletion complete.\n");
+ 
+
+   // Graceful termination.
    printf("Now exiting program...\n\n");
 
    exit(0);
