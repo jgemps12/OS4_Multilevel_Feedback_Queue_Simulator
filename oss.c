@@ -142,7 +142,7 @@ int main(int argc, char** argv) {
    // If user does not input the arguments corresponding to variables below, assign default values.
   
    // **Should eventually be 100.**
-   int proc = 6;
+   int proc = 1;
 
    // **Should eventually be 18.**
    int simul = 1;
@@ -246,11 +246,8 @@ int main(int argc, char** argv) {
    long int lowPriorityQuantum = 40 * oneMillionNanoseconds;
 
 
-   // Creates .txt file to store message update information from oss.c (this file).
+   // Creates .txt file and message queue to store message update information from oss.c (this file).
    initializeLogfile();
-
-
-   // Attempts to set up a message queue.
    initializeMessageQueue();
 
 
@@ -401,17 +398,15 @@ int main(int argc, char** argv) {
 	   // processTable[nextChild].messagesSent++;
 
 
-	    // If a child process will end, output in console and logfile that it will do so.
+	    // If the user process sends back a negative number for a time quantum, end child process..
 	    if (receiveBuffer.quantumData < 0) {
 	       removeFromProcessTable(receiveBuffer.messageType);
-               //childrenActive--;
+               childrenActive--;
                //nextLaunchTimeNano = determineNextLaunchNanoseconds(intervalInMSToLaunchChildren, systemNanoOnly);
 
 	       printf("**OSS: User #%d PID %ld is planning to terminate.**\n\n", nextChild, receiveBuffer.messageType);
 	       fprintf(logOutputFP, "**OSS: User #%d PID %ld is planning to terminate.**\n\n", nextChild, receiveBuffer.messageType);
                fflush(logOutputFP);
-
-	    
             }
 
 
