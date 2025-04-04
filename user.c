@@ -131,7 +131,7 @@ int main(int argc, char** argv) {
          //  Do nothing.
       }
 
-      probabilityValue = rand() % (100 + 1);
+      probabilityValue = (rand() % 100) + 1;
       processSelection = determineProcessSelection(probabilityValue);
   
       printf("probabilityValue: %d\n", probabilityValue);
