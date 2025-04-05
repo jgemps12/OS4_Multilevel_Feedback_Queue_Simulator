@@ -132,6 +132,7 @@ int determineDispatchTime();
 int addToProcessTable(pid_t);
 void removeFromProcessTable(pid_t);
 void printProcessTable();
+void printProcessTableToLogfile();
 void printHelpMessage();
 void detachAndClearSharedMemory();
 void removeMessageQueue();
@@ -155,7 +156,7 @@ int main(int argc, char** argv) {
    int timeLimitForChildren = 1;
 
    // **Should be a random interval by using variables maxTimeBetweenNewProcsSecs and maxTimeBetweenNewProcsNS.**
-   int intervalInMSToLaunchChildren = 500;
+   long long int maxTimeBetweenNewProcsNS = oneBillionNanoseconds;
 
    // Default time that process spends in dispatch. New values randomly generated.
    int dispatchTime = 1000;
@@ -290,16 +291,16 @@ int main(int argc, char** argv) {
 	      lastTablePrintNano = systemClockNano;
            }
 //	   systemClockIncrement = incrementClock(&systemClockSeconds, &systemClockNano, systemClockIncrement); 
-           printf("systemClockSeconds: %d\t systemClockNano: %lld\n", systemClockSeconds, systemClockNano);
+           //printf("systemClockSeconds: %d\t systemClockNano: %lld\n", systemClockSeconds, systemClockNano);
 	   
 
-           // Launches a child based on [intervalInMSToLaunchChildren].
+           // Launches a child based on [maxTimeBetweenNewProcsNS].
 	   if ((systemNanoOnly - nextLaunchTimeNano >= (long double) hundredMS) ||
                (systemNanoOnly - nextLaunchTimeNano >= 0)) { 
 	     
 	       processID = fork();
              
-	       nextLaunchTimeNano = determineNextLaunchNanoseconds(intervalInMSToLaunchChildren, systemNanoOnly);
+	       nextLaunchTimeNano = determineNextLaunchNanoseconds(maxTimeBetweenNewProcsNS, systemNanoOnly);
 	       break;
 	    }   
          }
@@ -362,7 +363,7 @@ int main(int argc, char** argv) {
               lastTablePrintNano = systemClockNano;
            }
 //         systemClockIncrement = incrementClock(&systemClockSeconds, &systemClockNano, systemClockIncrement);
-           printf("systemClockSeconds: %d\t systemClockNano: %lld\n", systemClockSeconds, systemClockNano);
+           //printf("systemClockSeconds: %d\t systemClockNano: %lld\n", systemClockSeconds, systemClockNano);
 	      
 
          if (processTable[nextChild].occupied == 1) {	    
@@ -382,7 +383,7 @@ int main(int argc, char** argv) {
                exit(-1);
             }
   
-	    printf("\n\nsendBuffer.quantumData (from oss.c): %ld\n\n", sendBuffer.quantumData);
+	    //printf("\n\nsendBuffer.quantumData (from oss.c): %ld\n\n", sendBuffer.quantumData);
 
 
 	    dispatchTime = determineDispatchTime();
@@ -423,7 +424,7 @@ int main(int argc, char** argv) {
 
 	    // Increment clock based on a child's scheduled time.
 	    systemClockIncrement = incrementClock(&systemClockSeconds, &systemClockNano, receiveBuffer.quantumData);
-            printf("\n\nreceiveBuffer.quantumData (from oss.c): %ld\n\n", receiveBuffer.quantumData);
+            //printf("\n\nreceiveBuffer.quantumData (from oss.c): %ld\n\n", receiveBuffer.quantumData);
 
 
 	    // Prints duration of time that a process was scheduled.
@@ -436,8 +437,14 @@ int main(int argc, char** argv) {
 	       fprintf(logOutputFP, "**OSS: *Did not use its entire time quantum**\n");
 	    }
 	    
-
-	   // processTable[nextChild].messagesSent++;
+            
+	    // Add accumulating schedule time info to the process table.
+	    processTable[nextChild].serviceTimeNanoseconds += receiveBuffer.quantumData;
+            
+	    if (processTable[nextChild].serviceTimeNanoseconds >= oneBillionNanoseconds) {
+	       processTable[nextChild].serviceTimeSeconds++;
+	       processTable[nextChild].serviceTimeNanoseconds -= oneBillionNanoseconds;
+	    }
 
 
 	    // If the user process sends back a negative number for a time quantum, end child process..
@@ -473,7 +480,7 @@ int main(int argc, char** argv) {
             while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
                removeFromProcessTable(pid);
                childrenActive--;
-               nextLaunchTimeNano = determineNextLaunchNanoseconds(intervalInMSToLaunchChildren, systemNanoOnly);
+               nextLaunchTimeNano = determineNextLaunchNanoseconds(maxTimeBetweenNewProcsNS, systemNanoOnly);
             }
          }
 
@@ -651,9 +658,10 @@ long int randomizeChildNanoseconds(int childTimeLimitSecs, int randomSeconds) {
 
 
 // Only deals with system nanoseconds to determine next launch time. 
-long long int determineNextLaunchNanoseconds (int intervalMS, long long int currentNanoTime) {
-    long long int nanoConversion = (long long int)intervalMS * 1000000;
-    long double newLaunchTime = (long double) currentNanoTime + nanoConversion;
+long long int determineNextLaunchNanoseconds (int intervalNS, long long int currentNanoTime) {
+    //long long int nanoConversion = (long long int)intervalNS * 1000000;
+	
+    long double newLaunchTime = (long double) currentNanoTime + intervalNS;
 
     return newLaunchTime;
 }
@@ -680,9 +688,9 @@ int addToProcessTable(pid_t pid) {
          processTable[i].processID = pid;
          processTable[i].startSeconds = systemClockSeconds;
          processTable[i].startNanoseconds = systemClockNano;
-	 processTable[i].serviceTimeSeconds = 9999;
-	 processTable[i].serviceTimeNanoseconds = 8888;
-	 processTable[i].eventWaitSeconds = 7777;
+	 processTable[i].serviceTimeSeconds = 0;
+	 processTable[i].serviceTimeNanoseconds = 0;
+	 processTable[i].eventWaitSeconds = 0;
 	 processTable[i].eventWaitNanoseconds = 6666;
 	 processTable[i].blocked = 5555;
 
@@ -754,8 +762,50 @@ void printProcessTable() {
    }
 
    printf("\n");
+
+   printProcessTableToLogfile();
 }
 
+void printProcessTableToLogfile() {
+   fprintf(logOutputFP, "OSS: Outputting process table:\n");
+   fprintf(logOutputFP, "\nOSS PID: %d  SysClockS: %d  SysClockNano: %lld\n", getpid(), systemClockSeconds, systemClockNano);
+   fprintf(logOutputFP, "Process Table:\n");
+   fprintf(logOutputFP, "Entry\t Occupied\t PID\t\t StartS\t StartN\t\t ServiceS\t ServiceN\t EventWaitS\t EventWaitN\t Blocked\n");
+
+   int i;
+
+
+   for (i = 0; i < 20; i++) {
+      // Prints first 3 columns (Entry, Occupied, PID).
+      fprintf(logOutputFP, "%d\t %d\t\t %d\t", i, processTable[i].occupied, processTable[i].processID);
+      if (processTable[i].occupied == 0) {
+         fprintf(logOutputFP, "\t");
+      }
+
+      // Prints columns 4 and 5 (StartS, StartN).
+      fprintf(logOutputFP, " %d\t %ld\t", processTable[i].startSeconds, processTable[i].startNanoseconds);
+      if (processTable[i].startNanoseconds < 1000000) {
+         fprintf(logOutputFP, "\t");
+      }
+
+      // Prints columns 6 and 7 (ServiceS, ServiceN).
+      fprintf(logOutputFP, " %d\t\t %ld\t", processTable[i].serviceTimeSeconds, processTable[i].serviceTimeNanoseconds);
+      if (processTable[i].serviceTimeNanoseconds < 1000000) {
+         fprintf(logOutputFP, "\t");
+      }
+
+      // Prints columns 8 and 9 (EventWaitS, EventWaitN).
+      fprintf(logOutputFP, " %d\t\t %ld\t", processTable[i].eventWaitSeconds, processTable[i].eventWaitNanoseconds);
+      if (processTable[i].eventWaitNanoseconds < 1000000) {
+         fprintf(logOutputFP, "\t");
+      }
+
+      // Prints column 10 (Blocked--the final column).
+      fprintf(logOutputFP, " %d\n", processTable[i].blocked);
+   }
+
+   fprintf(logOutputFP, "\n");
+}
 
 // Displays a help message if user enters './oss -h'.
 void printHelpMessage() {
