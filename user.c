@@ -112,7 +112,7 @@ int main(int argc, char** argv) {
       // Receives a message from the parent.
       receiveMessageFromOSS();
 
-      printf("\nreceiveBuffer.quantumData (from user.c): %ld\n", receiveBuffer.quantumData);
+      //printf("\nreceiveBuffer.quantumData (from user.c): %ld\n", receiveBuffer.quantumData);
       
 
       // Compare # of seconds before and after shared memory is re-read.
@@ -127,15 +127,15 @@ int main(int argc, char** argv) {
 
       // Slow down program to prevent race conditions between Process Table and printf() message times (for oss.c and user.c, respectively).
       int i;
-      for (i = 0; i < 100000000; i++) {
+      for (i = 0; i < 100000; i++) {
          //  Do nothing.
       }
 
       probabilityValue = (rand() % 100) + 1;
       processSelection = determineProcessSelection(probabilityValue);
   
-      printf("probabilityValue: %d\n", probabilityValue);
-      printf("processSelection: %d\n", processSelection);
+      //printf("probabilityValue: %d\n", probabilityValue);
+      //printf("processSelection: %d\n", processSelection);
 
       
       switch (processSelection) {       
@@ -146,7 +146,7 @@ int main(int argc, char** argv) {
 
             sendMessageToOSS();
 
-            printf("\nsendBuffer.quantumData (from user.c): %ld\n", sendBuffer.quantumData);
+            //printf("\nsendBuffer.quantumData (from user.c): %ld\n", sendBuffer.quantumData);
             iterations++;
          
 	    printf("USER PID: %d   PPID: %d  SysClockS: %d  SysClockNano: %ld ---%ld iteration(s) \n", getpid(), getppid(), systemClockSeconds, systemClockNano, iterations);
@@ -164,7 +164,7 @@ int main(int argc, char** argv) {
 
             sendMessageToOSS();
 
-            printf("\nsendBuffer.quantumData (from user.c): %ld\n", sendBuffer.quantumData);
+            //printf("\nsendBuffer.quantumData (from user.c): %ld\n", sendBuffer.quantumData);
             iterations++;
 
             printf("USER PID: %d   PPID: %d  SysClockS: %d  SysClockNano: %ld  ---%ld iteration(s) have passed since starting\n", getpid(), getppid(), systemClockSeconds, systemClockNano, iterations);
@@ -182,7 +182,7 @@ int main(int argc, char** argv) {
             snprintf(sendBuffer.stringData, sizeof(sendBuffer.stringData), "Message received to child. Now sending to parent. Child is now terminating.");
             sendMessageToOSS();
 
-            printf("\n\nsendBuffer.quantumData (from user.c): %ld\n\n", sendBuffer.quantumData);
+            //printf("\n\nsendBuffer.quantumData (from user.c): %ld\n\n", sendBuffer.quantumData);
 
             printf("USER PID: %d   PPID: %d  SysClockS: %d  SysClockNano: %ld  ---Terminating\n", getpid(), getppid(), systemClockSeconds, systemClockNano);
 
