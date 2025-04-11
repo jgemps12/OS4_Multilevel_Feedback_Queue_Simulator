@@ -91,7 +91,8 @@ int main(int argc, char** argv) {
    
    // processSelection uses numbers 1-3 to determine child process's outcome.
    // probabilityValue randomly chooses between 1 and 100 to determine processSelection value.
-   srand(time(NULL));
+   srand(time(NULL) ^ getpid());
+
    int probabilityValue = 0;
    int processSelection = -1;
    int timeQuantumFraction = 0;
@@ -117,9 +118,9 @@ int main(int argc, char** argv) {
 
       // Slow down program to prevent race conditions between Process Table and printf() message times (for oss.c and user.c, respectively).
       int i;
-      for (i = 0; i < 100000; i++) {
+  ///    for (i = 0; i < 100000; i++) {
          //  Do nothing.
-      }
+     // }
 
       probabilityValue = (rand() % 100) + 1;
       processSelection = determineProcessSelection(probabilityValue);
@@ -138,7 +139,7 @@ int main(int argc, char** argv) {
 
 	 // If child process runs for PART of its time quantum, but then becomes interrupted and BLOCKED.
 	 case 2:
-
+            //srand(time(NULL) ^ getpid());
 	    timeQuantumFraction = rand() % (99 + 1);
 
             sendBuffer.messageType = getpid();
@@ -151,6 +152,7 @@ int main(int argc, char** argv) {
 
 	 // If child process runs for PART of its time quantum, but then becomes TERMINATED.
 	 case 3:
+	   // srand(time(NULL) ^ getpid());
             timeQuantumFraction = rand() % (99 + 1);
 
 	    sendBuffer.messageType = getpid();
