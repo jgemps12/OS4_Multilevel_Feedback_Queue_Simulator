@@ -140,15 +140,13 @@ void periodicallyTerminateProgram(int);
 
 
 
-int main(int argc, char** argv) {  
+int main(int argc, char** argv) {
    int opt;
    strcpy(logfileFP, logfile);
 
-   // **Should eventually be 100.**
-   int proc = 5;
-
-   // **Should eventually be 18.**
-   int simul = 1;
+   // Hardcoded values (that used to be user options).
+   int proc = 60;
+   int simul = 14;
 
    // **Should not exist. user.c decides when a child terminates by selecting Option #3.**
    int timeLimitForChildren = 1;
@@ -241,8 +239,10 @@ int main(int argc, char** argv) {
 
 
    bool processesFinished = false;
+   bool noChildrenActive = true;
    int childrenActive = 0;                                          // # of children running simultaneously (not to be confused with 'proc').
    int totalChildrenLaunched = 0;                                   // # of children launched so far (not to be confused with 'simul').  
+   int plannedTerminations = 0;
    int nextChild = 0;
   
 
@@ -268,21 +268,13 @@ int main(int argc, char** argv) {
 
 
    while (processesFinished == false) {
- //     if (systemClockSeconds == 0 && systemClockNano == 0) {
-  //       systemClockIncrement = incrementClock(&systemClockSeconds, &systemClockNano, systemClockIncrement);
-        // printf("systemClockSeconds: %d\t systemClockNano: %lld\n", systemClockSeconds, systemClockNano);
-   //   }
-      // System time in shared memory constantly updates in loop.
-//      *secondsShared = systemClockSeconds;
-  //    *nanosecondsShared = systemClockNano;
-
 
       // If children are still available to launch simultaneously.
       if (childrenActive < simul && totalChildrenLaunched < proc) {
          pid_t processID;
-
+         
          int j;
- //        printf("systemNanoOnly: %lld\t nextLaunchTimeNano (out of 'while'): %lld\n", systemNanoOnly, nextLaunchTimeNano);
+         printf("systemNanoOnly: %lld\t nextLaunchTimeNano (out of 'while'): %lld\n", systemNanoOnly, nextLaunchTimeNano);
 
          // Spinlock ('while' loop) prevents multiple Process Tables from printing out in short time bursts.
          while (1) {
@@ -299,33 +291,33 @@ int main(int argc, char** argv) {
 
 	   // If no processes are ready, increment the clock 100 ms.
 	   systemClockIncrement = incrementClock(&systemClockSeconds, &systemClockNano, hundredMS); 
-  //         printf("systemClockSeconds: %d\t systemClockNano: %lld\n", systemClockSeconds, systemClockNano);
+  
            // System time in shared memory constantly updates in loop.
            *secondsShared = systemClockSeconds;
            *nanosecondsShared = systemClockNano;
 
 	   currentLaunchTimeNano = nextLaunchTimeNano;
 	  // nextLaunchTimeNano = determineNextLaunchNanoseconds(maxTimeBetweenNewProcsNS, systemNanoOnly);
-           printf("systemNanoOnly: %lld\t nextLaunchTimeNano (in 'while'): %lld\n", systemNanoOnly, nextLaunchTimeNano);
+//           printf("systemNanoOnly: %lld\t nextLaunchTimeNano (in 'while'): %lld\n", systemNanoOnly, nextLaunchTimeNano);
              
+
+           printf("currentLaunchTimeNano (start of program): %lld\t nextLaunchTimeNano: %lld\n\n\n", currentLaunchTimeNano, nextLaunchTimeNano);
+
+
            // Launches a child based on [maxTimeBetweenNewProcsNS]. 
-	    if (systemNanoOnly >= nextLaunchTimeNano) {
+	    if (systemNanoOnly >= nextLaunchTimeNano /*|| newProcessShouldBeLaunched == true*/) {
 	       processID = fork();
 
                nextLaunchTimeNano = determineNextLaunchNanoseconds(maxTimeBetweenNewProcsNS, systemNanoOnly);
-	       printf("currentLaunchTimeNano: %lld", currentLaunchTimeNano);
+	       //printf("currentLaunchTimeNano (from while(1)): %lld\n", currentLaunchTimeNano);
 	      
+	       
 	       // Makes sure system time updates EXACTLY to when a child launches, without rounding to the next 100 ms.
 	       long int exactLaunchTime = currentLaunchTimeNano - systemNanoOnly;
-               //printf("systemNanoOnly: %lld\t nextLaunchTimeNano (in 'if'): %lld\n", systemNanoOnly, nextLaunchTimeNano);
- 
-	       //printf("exactLaunchTime: %ld\n", exactLaunchTime);      
-	       //if (exactLaunchTime < 0) {
-	         systemClockIncrement = incrementClock(&systemClockSeconds, &systemClockNano, exactLaunchTime);
-              // }
-	      // else {
-	//	  systemClockIncrement = incrementClock(&systemClockSeconds, &systemClockNano, nextLaunchTimeNano);
-	//       }
+	       systemClockIncrement = incrementClock(&systemClockSeconds, &systemClockNano, exactLaunchTime);
+              
+	       noChildrenActive = false;
+
 	       break;
 	    }   
          }
@@ -374,16 +366,27 @@ int main(int argc, char** argv) {
 
 
       // For-loop acts as a Round Robin scheduling mechanism to determine which child should receive the next message from the parent.
+     /* while (newProcessShouldBeLaunched == false) {
+         
+	 printf("START OF while (newProcessShouldBeLaunched == false\n");
+         printf("childrenActive = %d\t totalChildrenLaunched = %d\t proc = %d\n", childrenActive, totalChildrenLaunched, proc);
+     
+	 if (systemNanoOnly >= nextLaunchTimeNano) {
+            newProcessShouldBeLaunched = true;
+      
+	    break;
+	 }
+	 if (childrenActive == 0) {
+            break;
+	 }
+*/    while (systemNanoOnly < nextLaunchTimeNano || totalChildrenLaunched == proc || childrenActive == simul) {
       for (nextChild = 0; nextChild < totalChildrenLaunched; nextChild++) {	       
 	 
-	 // Print process table for every half second of simulated system time.
-/*         if ((systemClockNano == halfBillionNanoseconds || systemClockNano == 0) && (nextChild == 0)) {
-            printProcessTable();
-         }
-  */
+	 // Print process table every half second of simulated system time. 
          long long int lastPrintoutTime = (lastTablePrintSeconds * oneBillionNanoseconds) + lastTablePrintNano;
            if (systemNanoOnly - lastPrintoutTime >= halfBillionNanoseconds) {
-              printProcessTable();
+              fprintf(logOutputFP, "Printing table IN FOR LOOP\n\n\n");
+	      printProcessTable();
 
               lastTablePrintSeconds = systemClockSeconds;
               lastTablePrintNano = systemClockNano;
@@ -428,11 +431,11 @@ int main(int argc, char** argv) {
 
 	    // Slow down program to prevent race conditions between times in Process Table and those analyzed in user.c.
 	    // Also prevents multiple empty Process Tables from printing towards the program's end.
-	    /*int i; 
+	    int i; 
             for (i = 0; i < 100000; i++) {
                // Do nothing.
             }
-*/
+
 
             // Another buffer stores info about what the parent receives from a child.
             receiveBuffer.messageType = processTable[nextChild].processID;
@@ -477,23 +480,44 @@ int main(int argc, char** argv) {
 	    // If the user process sends back a negative number for a time quantum, end child process..
 	    if (receiveBuffer.quantumData < 0) {
 	       removeFromProcessTable(receiveBuffer.messageType);
-              // childrenActive--;
+             // childrenActive--;
                //nextLaunchTimeNano = determineNextLaunchNanoseconds(intervalInMSToLaunchChildren, systemNanoOnly);
+            
 
 	       printf("---OSS: User #%d PID %ld is planning to terminate.---\n\n", nextChild, receiveBuffer.messageType);
 	       fprintf(logOutputFP, "---OSS: User #%d PID %ld is planning to terminate.---\n\n", nextChild, receiveBuffer.messageType);
-               fflush(logOutputFP);
+               plannedTerminations++;
+
+	       printf("INSIDE FOR-LOOP.\n");
+               printf("childrenActive = %d\t totalChildrenLaunched = %d\t proc = %d\n", childrenActive, totalChildrenLaunched, proc);
+ 
+	       int status;
+	       pid_t pid;
+
+	       removeFromProcessTable(pid);
+	       //childrenActive--;
+	      
+               printf("childrenActive has decremented\n\n\n\n");
+
+	       //while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+                 
+               //}
+
+	      	       
+	       fflush(logOutputFP);
+	       
             }
 
+         //   printf("END OF FOR-LOOP.\n");
+       //     printf("childrenActive = %d\t totalChildrenLaunched = %d\t proc = %d\n", childrenActive, totalChildrenLaunched, proc);
 
-/*	    if ((systemNanoOnly - nextLaunchTimeNano >= (long double) oneQuarterSecond) ||
-               (systemNanoOnly - nextLaunchTimeNano >= 0)) {
-               break;
-            }	 
-*/	 } 
+	 }
 	 
+     // }
 	 // If no more children are running and the maximum # of total children have been launched, end loop/program.
          if (childrenActive == 0 && totalChildrenLaunched == proc) {
+            printf("PROGRAM SHOULD END NOW.\n");
+            printf("childrenActive = %d\t totalChildrenLaunched = %d\t proc = %d\n", childrenActive, totalChildrenLaunched, proc);
             processesFinished = true;
 
             break;
@@ -529,9 +553,30 @@ int main(int argc, char** argv) {
 	       childrenActive--;
             }
          }
-         if (childrenActive == 0) {
+	 printf("systemNanoOnly (end of program): %lld\n", systemNanoOnly);
+	 printf("currentLaunchTimeNano (end of program): %lld\t nextLaunchTimeNano: %lld\n\n", currentLaunchTimeNano, nextLaunchTimeNano);
+         printf("totalChildrenLaunched: %d\t plannedTerminations: %d\n", totalChildrenLaunched, plannedTerminations);
+	 if (systemNanoOnly >= nextLaunchTimeNano && totalChildrenLaunched < proc) {
+            printf("Break 1\n");
             break;
 	 }
+	 if (plannedTerminations == totalChildrenLaunched) {
+            printf("Break 2\n");
+            break;
+	 }
+      
+      }
+         if (systemNanoOnly >= nextLaunchTimeNano && totalChildrenLaunched < proc) {
+            printf("Break 3");
+	    break;
+         }
+         if (plannedTerminations == totalChildrenLaunched) {
+            printf("Break 4");
+	    break;
+         }
+         if (childrenActive == 0 && totalChildrenLaunched == proc) {
+	    break;
+         }
       }
    }
    printProcessTable();
@@ -765,7 +810,7 @@ void removeFromProcessTable(pid_t pid) {
 void printProcessTable() {
    printf("\nOSS PID: %d  SysClockS: %d  SysClockNano: %lld\n", getpid(), systemClockSeconds, systemClockNano);
    printf("Process Table:\n");
-   printf("Entry\t Occupied\t PID\t StartS\t StartN\t\t ServiceS\t ServiceN\t EventWaitS\t EventWaitN\t Blocked\n");
+   printf("Entry\t Occupied\t PID\t\t StartS\t StartN\t\t ServiceS\t ServiceN\t EventWaitS\t EventWaitN\t Blocked\n");
 
    int i;
 
@@ -773,7 +818,10 @@ void printProcessTable() {
    for (i = 0; i < 20; i++) {
       // Prints first 3 columns (Entry, Occupied, PID).
       printf("%d\t %d\t\t %d\t", i, processTable[i].occupied, processTable[i].processID);
-      
+      if (processTable[i].processID == 0) {
+         printf("\t");
+      }
+
       // Prints columns 4 and 5 (StartS, StartN).
       printf(" %d\t %ld\t", processTable[i].startSeconds, processTable[i].startNanoseconds);
       if (processTable[i].startNanoseconds < 1000000) {
@@ -805,7 +853,7 @@ void printProcessTableToLogfile() {
    fprintf(logOutputFP, "OSS: Outputting process table:\n");
    fprintf(logOutputFP, "\nOSS PID: %d  SysClockS: %d  SysClockNano: %lld\n", getpid(), systemClockSeconds, systemClockNano);
    fprintf(logOutputFP, "Process Table:\n");
-   fprintf(logOutputFP, "Entry\t Occupied\t PID\t StartS\t StartN\t\t ServiceS\t ServiceN\t EventWaitS\t EventWaitN\t Blocked\n");
+   fprintf(logOutputFP, "Entry\t Occupied\t PID\t\t StartS\t StartN\t\t ServiceS\t ServiceN\t EventWaitS\t EventWaitN\t Blocked\n");
 
    int i;
 
@@ -813,7 +861,10 @@ void printProcessTableToLogfile() {
    for (i = 0; i < 20; i++) {
       // Prints first 3 columns (Entry, Occupied, PID).
       fprintf(logOutputFP, "%d\t %d\t\t %d\t", i, processTable[i].occupied, processTable[i].processID);
-   
+      if (processTable[i].processID == 0) {
+         fprintf(logOutputFP, "\t");
+      }
+
       // Prints columns 4 and 5 (StartS, StartN).
       fprintf(logOutputFP, " %d\t %ld\t", processTable[i].startSeconds, processTable[i].startNanoseconds);
       if (processTable[i].startNanoseconds < 1000000) {
