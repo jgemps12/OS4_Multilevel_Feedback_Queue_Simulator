@@ -120,11 +120,14 @@ long int systemClockIncrement = hundredMS;
 int currentChildIndex = 0;
 
 
-// Function prototypes.
+/*************************FUNCTION PROTOTYPES********************************/
+
+//For initialization.
 void initializeLogfile();
 void initializeMessageQueue();
-
 void initializeFeedbackQueue(MultiLevelQueue *);
+
+// For feedback queue.
 bool isQueueEmpty(MultiLevelQueue *);
 void enqueue(MultiLevelQueue *, pid_t);
 pid_t dequeue(MultiLevelQueue *);
@@ -132,19 +135,28 @@ pid_t peekQueue(MultiLevelQueue *);
 void printAllFeedbackQueues(MultiLevelQueue *);
 void printOneQueue(MultiLevelQueue *);
 
+// For system clock/time operations.
 long long int incrementClock(int *, long long int *, int);
 long long int convertSystemTimeToNanosecondsOnly (int *, long long int *); 
 long long int determineNextLaunchNanoseconds(long long int, long long int);
 int determineDispatchTime();
+
+// For process table operations.
 int addToProcessTable(pid_t);
 int findIndexInProcessTable(pid_t);
 void addServiceTimeToProcessTable(int);
 void removeFromProcessTable(pid_t);
 void printProcessTable();
 void printProcessTableToLogfile();
+
+// For message passing operations.
 void sendMessageToUSER();
 void receiveMessageFromUSER(int);
+
+// For guiding the user.
 void printHelpMessage();
+
+// For terminating the program.
 void detachAndClearSharedMemory();
 void removeMessageQueue();
 void periodicallyTerminateProgram(int);
@@ -156,8 +168,8 @@ int main(int argc, char** argv) {
    strcpy(logfileFP, logfile);
 
    // Hardcoded values (that used to be user options).
-   int proc = 20;
-   int simul = 10;
+   int proc = 8;
+   int simul = 4;
 
    // Determines a random time frame between process launches.
    long long int maxTimeBetweenNewProcsNS = oneBillionNanoseconds;
@@ -214,7 +226,10 @@ int main(int argc, char** argv) {
    int plannedTerminations = 0;
    int nextChild = 0;
    int iterationBeforeBreak = 0;
+   int queueLevel = 0;
+   
    pid_t processDispatchedNext;
+
    // Initializes shared memory segments.
    *secondsShared = 0;
    *nanosecondsShared = 0;
@@ -301,7 +316,9 @@ int main(int argc, char** argv) {
          // Work with parent process. Increment the current # of total children and those running simultaneously.
          // Meanwhile, send a message to a running child process.
 	 if (processID > 0) {
-            if (totalChildrenLaunched == plannedTerminations) {
+            queueLevel = 0; 
+		 
+           if (totalChildrenLaunched == plannedTerminations) {
 	       processDispatchedNext = processID;
 	    }
 
@@ -318,7 +335,7 @@ int main(int argc, char** argv) {
             fprintf(logOutputFP, "++OSS: Generating process with PID %d and putting it in queue 0 ", processID);
             fprintf(logOutputFP, "at time %d:%lld\n\n", systemClockSeconds, systemClockNano);
 
-            enqueue(&queue[0], processID);
+            enqueue(&queue[queueLevel], processID);
             printAllFeedbackQueues(queue);
 
 	    nextChild = findIndexInProcessTable(processDispatchedNext);
@@ -366,9 +383,11 @@ int main(int argc, char** argv) {
             systemClockIncrement = incrementClock(&systemClockSeconds, &systemClockNano, dispatchTime);
 
 
-            printf("OSS: Dispatching process with PID %ld from queue 0 at time %d:%lld\n", sendBuffer.messageType, systemClockSeconds, systemClockNano);
+            printf("OSS: Dispatching process with PID %ld from queue %d ", sendBuffer.messageType, queueLevel); 
+	    printf("at time %d:%lld\n", systemClockSeconds, systemClockNano);
 	    printf("OSS: Total time spent in dispatch was %d nanoseconds\n", dispatchTime);
-	    fprintf(logOutputFP, "OSS: Dispatching process with PID %ld from queue 0 at time %d:%lld\n", sendBuffer.messageType, systemClockSeconds, systemClockNano);
+	    fprintf(logOutputFP, "OSS: Dispatching process with PID %ld from queue %d ", sendBuffer.messageType, queueLevel);
+	    fprintf(logOutputFP, "at time %d:%lld\n", systemClockSeconds, systemClockNano);
             fprintf(logOutputFP, "OSS: Total time spent in dispatch was %d nanoseconds\n", dispatchTime);
             fflush(logOutputFP);
        
@@ -399,10 +418,19 @@ int main(int argc, char** argv) {
                 
 	    
 	    // Remove process from queue that previously ran. Move process to a different queue if it is still running/ready.
-	    processDispatchedNext = dequeue(&queue[0]);
+	    processDispatchedNext = dequeue(&queue[queueLevel]);
 
-	    if (receiveBuffer.quantumData >= 0) {
-	       enqueue(&queue[0], processDispatchedNext);
+	    if (receiveBuffer.quantumData > 0) {
+	       
+	       // POSSIBLE EMPTY QUEUE CONDITIONAL.
+	       
+               if (queueLevel < 2) {
+	          enqueue(&queue[++queueLevel], processDispatchedNext);
+	       }
+	       else if (queueLevel == 2) {
+	          enqueue(&queue[queueLevel], processDispatchedNext);
+	       }
+
             }
             printAllFeedbackQueues(queue);
 	    
@@ -411,11 +439,14 @@ int main(int argc, char** argv) {
 	    if (sendBuffer.quantumData != receiveBuffer.quantumData && receiveBuffer.quantumData > 0) {	       
 	       printf("**OSS: Did not use its entire time quantum**\n");
 	       fprintf(logOutputFP, "**OSS: Did not use its entire time quantum**\n");
+
+
+	       // BLOCKED QUEUE OPERATIONS.
 	    }
 
 
             // Schedules the next process. If queue is empty, (sdfsdfsdf) 
-	    processDispatchedNext = peekQueue(&queue[0]);
+	    processDispatchedNext = peekQueue(&queue[queueLevel]);
 
 	    if (processDispatchedNext <= 0) {
 	       processDispatchedNext = sendBuffer.messageType;
@@ -561,8 +592,8 @@ bool isQueueEmpty(MultiLevelQueue *queue) {
 void enqueue(MultiLevelQueue *queue, pid_t pid) {
    if (queue->rear >= MAX_SIZE) {
       printf("ERROR in oss.c: enqueue() function failed. Cannot add PID to queue.\n");
-
-      exit(-1);
+      
+      periodicallyTerminateProgram(-1);
    }
 
    if (isQueueEmpty(queue) == true) {
@@ -580,8 +611,9 @@ void enqueue(MultiLevelQueue *queue, pid_t pid) {
 pid_t dequeue(MultiLevelQueue *queue) {
    if (isQueueEmpty(queue) == true) {
       printf("ERROR in oss.c: dequeue() function failed. Queue underflow occurred.\n");
-
-      exit(-1);
+     
+     
+      periodicallyTerminateProgram(-1);
    }   
 
    pid_t processID = queue->processEntries[queue->front];
@@ -856,7 +888,7 @@ void sendMessageToUSER() {
       printf("ERROR in oss.c: Problem with msgsnd() function.\n");
       printf("Cannot send message to user.c.\n\n");
 
-      exit(-1);
+      periodicallyTerminateProgram(-1);
    }
 }
 
@@ -866,7 +898,7 @@ void receiveMessageFromUSER(int i) {
       printf("ERROR in oss.c: Problem with msgrcv() function.\n");
       printf("Cannot receive message from user.c.\n\n");
 
-      exit(-1);
+      periodicallyTerminateProgram(-1);
    }
 }
 
