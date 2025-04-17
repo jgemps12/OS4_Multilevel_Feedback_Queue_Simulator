@@ -16,6 +16,7 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <sys/msg.h>
+#include <sys/time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,7 +41,7 @@
 #define PERMISSIONS 0644
 
 // Starting a multilevel feedback queue.
-#define MAX_SIZE 100
+#define MAX_SIZE 1000
 #define QUEUE_COUNT 4
 
 
@@ -140,6 +141,7 @@ long long int incrementClock(int *, long long int *, int);
 long long int convertSystemTimeToNanosecondsOnly (int *, long long int *); 
 long long int determineNextLaunchNanoseconds(long long int, long long int);
 int determineDispatchTime();
+void slowDownProgram();
 
 // For process table operations.
 int addToProcessTable(pid_t);
@@ -168,11 +170,11 @@ int main(int argc, char** argv) {
    strcpy(logfileFP, logfile);
 
    // Hardcoded values (that used to be user options).
-   int proc = 8;
-   int simul = 4;
+   int proc = 20;
+   int simul = 10;
 
    // Determines a random time frame between process launches.
-   long long int maxTimeBetweenNewProcsNS = oneBillionNanoseconds;
+   long long int maxTimeBetweenNewProcsNS = halfBillionNanoseconds;
    long long int nextLaunchTimeNano = determineNextLaunchNanoseconds(maxTimeBetweenNewProcsNS, systemNanoOnly);
    long long int currentLaunchTimeNano = 0;
    
@@ -225,6 +227,7 @@ int main(int argc, char** argv) {
    int totalChildrenLaunched = 0;                                   // # of children launched so far (not to be confused with 'simul').  
    int plannedTerminations = 0;
    int nextChild = 0;
+   int childWithServiceTime = -1;
    int iterationBeforeBreak = 0;
    int queueLevel = 0;
    
@@ -249,6 +252,10 @@ int main(int argc, char** argv) {
    long int mediumPriorityQuantum = 20 * oneMillionNanoseconds;
    long int lowPriorityQuantum = 40 * oneMillionNanoseconds;
 
+
+   long int realSeconds;
+   long int realMicroseconds;
+
    // Creates .txt file and message queue to store message update information from oss.c (this file).
    initializeLogfile();
    initializeMessageQueue();
@@ -260,6 +267,11 @@ int main(int argc, char** argv) {
    alarm(60);
 
 
+   struct timeval realStartTime;
+   struct timeval realCurrentTime;
+   gettimeofday(&realStartTime, NULL);
+
+
    while (processesFinished == false) {
 
       // If children are still available to launch simultaneously.
@@ -268,10 +280,32 @@ int main(int argc, char** argv) {
          
          // Keeps incrementing system clock until a process is ready to launch.
          while (1) {
-	   long long int lastTablePrintout = (lastTablePrintSeconds * oneBillionNanoseconds) + lastTablePrintNano;
+           gettimeofday(&realCurrentTime, NULL);
+           
+	  // printf("realSeconds: %ld\n", realSeconds);
+           realSeconds = realCurrentTime.tv_sec - realStartTime.tv_sec;
+           realMicroseconds = realCurrentTime.tv_usec - realStartTime.tv_usec;	   
+	
+	   if (realSeconds >= 3) {
+	      break;
+	   }
+	
+	   printf("totalChildrenLaunched: %d\n\n\n", totalChildrenLaunched);
 
-           if (systemNanoOnly - lastTablePrintout >= halfBillionNanoseconds) { 
-	      printAllFeedbackQueues(queue);
+
+           long long int lastTablePrintout = (lastTablePrintSeconds * oneBillionNanoseconds) + lastTablePrintNano;
+
+	   if (realMicroseconds < 0) {
+              realSeconds--;
+	      realMicroseconds += 1000000;
+	   }
+
+	   if (realSeconds >= 3) {
+	      break;
+	   }
+
+           if (systemNanoOnly - lastTablePrintout >= halfBillionNanoseconds) { 		   
+              printAllFeedbackQueues(queue);
 	      printProcessTable();
 
 	      lastTablePrintSeconds = systemClockSeconds;
@@ -302,7 +336,7 @@ int main(int argc, char** argv) {
          }
 
 	 // Work with child process. 
-         if (processID == 0) {
+         if (processID == 0 && realSeconds < 3) {
             *secondsShared = systemClockSeconds;
             *nanosecondsShared = systemClockNano;
 
@@ -315,16 +349,26 @@ int main(int argc, char** argv) {
 
          // Work with parent process. Increment the current # of total children and those running simultaneously.
          // Meanwhile, send a message to a running child process.
-	 if (processID > 0) {
+	 if (processID > 0 && realSeconds < 3) {
             queueLevel = 0; 
 		 
-           if (totalChildrenLaunched == plannedTerminations) {
-	       processDispatchedNext = processID;
-	    }
+//            if (totalChildrenLaunched == plannedTerminations) {
+	    processDispatchedNext = processID;
+	   
+//	    
 
 	    childrenActive++;
 	    totalChildrenLaunched++;
+ gettimeofday(&realCurrentTime, NULL);
 
+          // printf("realSeconds: %ld\n", realSeconds);
+           realSeconds = realCurrentTime.tv_sec - realStartTime.tv_sec;
+           realMicroseconds = realCurrentTime.tv_usec - realStartTime.tv_usec;
+
+
+
+	    printf("realSeconds: %ld\t totalChildrenLaunched: %d\n", realSeconds, totalChildrenLaunched);
+          
 	    if (addToProcessTable(processID) == -1) {
                printf("ERROR in oss.c: Process Control Block (PCB) table is full.\n");
                printf("Cannot add PID %d\n", processID);
@@ -336,31 +380,43 @@ int main(int argc, char** argv) {
             fprintf(logOutputFP, "at time %d:%lld\n\n", systemClockSeconds, systemClockNano);
 
             enqueue(&queue[queueLevel], processID);
-            printAllFeedbackQueues(queue);
+            //printAllFeedbackQueues(queue);
 
 	    nextChild = findIndexInProcessTable(processDispatchedNext);
          }
       }
 
       bool queueEmpty = true;
-      
+     
+
+
+
+
+
+
+
+
+
+
+
+
+
 
       // While-loop determines which child needs to become scheduled.
       while (systemNanoOnly < nextLaunchTimeNano || totalChildrenLaunched == proc || childrenActive == simul) {
-
 	 // Print process table every half second of simulated system time. 
          long long int lastPrintoutTime = (lastTablePrintSeconds * oneBillionNanoseconds) + lastTablePrintNano;
             
 	 if (systemNanoOnly - lastPrintoutTime >= halfBillionNanoseconds) {
-            printAllFeedbackQueues(queue);	    
+            //printAllFeedbackQueues(queue);	    
             printProcessTable();
 
             lastTablePrintSeconds = systemClockSeconds;
             lastTablePrintNano = systemClockNano;
          }   
-	 nextChild = findIndexInProcessTable(processDispatchedNext);
-
-
+        
+//	 printProcessTable();
+	  
 	 if (processTable[nextChild].occupied == 1) {	    
 	    
             // A buffer stores information about what will be sent to a child.
@@ -370,7 +426,19 @@ int main(int argc, char** argv) {
 	       printf("false\n");
 	       sendBuffer.messageType = processDispatchedNext;
             }
-        
+  
+
+  
+            if (isQueueEmpty(&queue[queueLevel]) == false) {
+               processDispatchedNext = peekQueue(&queue[queueLevel]);
+               sendBuffer.messageType = processDispatchedNext;
+
+               nextChild = findIndexInProcessTable(processDispatchedNext);
+          
+
+
+            }
+
 	    // ** 10 ms time quantum sent to child.
 	    sendBuffer.quantumData = highPriorityQuantum;   
 	    snprintf(sendBuffer.stringData, sizeof(sendBuffer.stringData), "Message sent to child %d again. Child is still running.", nextChild);
@@ -380,7 +448,35 @@ int main(int argc, char** argv) {
   
 	    // Determine a random overhead time occurring after a process has just launched.
 	    dispatchTime = determineDispatchTime();
-            systemClockIncrement = incrementClock(&systemClockSeconds, &systemClockNano, dispatchTime);
+  
+   	    systemClockIncrement = incrementClock(&systemClockSeconds, &systemClockNano, dispatchTime);
+
+
+
+/*
+	    printf("if(isQueueEmpty): queueLevel: %d\n", queueLevel);
+            if (isQueueEmpty(&queue[queueLevel]) == false) {
+               printf("Queue is not empty\n");
+	       processDispatchedNext = peekQueue(&queue[queueLevel]);
+	       sendBuffer.messageType = processDispatchedNext;
+	       
+               nextChild = findIndexInProcessTable(processDispatchedNext);
+               printf("nextChild: %d\t processDispatchedNext: %d\n", nextChild, processDispatchedNext);
+
+
+
+            }*/
+            if (processDispatchedNext <= 0) {
+               
+
+               processDispatchedNext = sendBuffer.messageType;
+            }
+
+//	    printAllFeedbackQueues(queue);
+  //          printf("Queue 0: queue->front: %d\t queue->rear: %d\n", queue[0].front, queue[0].rear);
+//	    printf("Queue 1: queue->front: %d\t queue->rear: %d\n", queue[1].front, queue[1].rear);
+//
+  //          printf("Queue 2: queue->front: %d\t queue->rear: %d\n", queue[2].front, queue[2].rear);
 
 
             printf("OSS: Dispatching process with PID %ld from queue %d ", sendBuffer.messageType, queueLevel); 
@@ -390,93 +486,155 @@ int main(int argc, char** argv) {
 	    fprintf(logOutputFP, "at time %d:%lld\n", systemClockSeconds, systemClockNano);
             fprintf(logOutputFP, "OSS: Total time spent in dispatch was %d nanoseconds\n", dispatchTime);
             fflush(logOutputFP);
-       
+  /*
+           if (isQueueEmpty(&queue[queueLevel]) == false) {
+               printf("processDispatchedNext (isQueueEmpty, peekQueue()): %d\t queueLevel: %d\n", processDispatchedNext, queueLevel);
+               processDispatchedNext = peekQueue(&queue[queueLevel]);
+               printf("processDispatchedNext AFTER (isQueueEmpty, peekQueue()): %d\t queueLevel: %d\n", processDispatchedNext, queueLevel);
+
+            }
+            if (processDispatchedNext <= 0) {
+               printf("processDispatchedNext <= 0 (peekQueue()): %d\t: queueLevel: %d\n", processDispatchedNext, queueLevel);
+
+               processDispatchedNext = sendBuffer.messageType;
+            }
+*/
+
+
+
+
+
 	    // Slow down program to prevent race conditions between times in Process Table and those analyzed in user.c.
 	    // Also prevents multiple empty Process Tables from printing towards the program's end.
 	    int i; 
-            for (i = 0; i < 2000000; i++) {
+            for (i = 0; i < 2000000 * totalChildrenLaunched; i++) {
                // Do nothing.
             }  
+           
 
+	    
             // Another buffer stores info about what the parent receives from a child.
-            receiveBuffer.messageType = processTable[nextChild].processID;
-            receiveBuffer.quantumData = highPriorityQuantum;
-
+            //receiveBuffer.messageType = processTable[nextChild].processID;
+            receiveBuffer.messageType = sendBuffer.messageType;
+	    receiveBuffer.quantumData = highPriorityQuantum;
 
 	    // Parent process receives a message from a child process. Output printed to a logfile.
 	    receiveMessageFromUSER(nextChild);
-
+          
 
 	    // Increment clock based on a child's scheduled time.
             int absoluteValueQuantData = abs(receiveBuffer.quantumData);
 	    systemClockIncrement = incrementClock(&systemClockSeconds, &systemClockNano, absoluteValueQuantData);
 
 
+	    if (receiveBuffer.quantumData == 0) {
+	    //   receiveBuffer.quantumData = highPriorityQuantum;
+	    }
+
 	    // Prints duration of time that a process was scheduled.
-	    printf("OSS: Receiving that process with PID %ld ran for %ld nanoseconds\n", receiveBuffer.messageType, receiveBuffer.quantumData);
+	    printf("OSS: Receiving that process with PID %ld ran for %ld nanoseconds\n", sendBuffer.messageType, receiveBuffer.quantumData);
             fprintf(logOutputFP, "OSS: Receiving that process with PID %ld ran for %ld nanoseconds\n", receiveBuffer.messageType, receiveBuffer.quantumData);
-                
-	    
-	    // Remove process from queue that previously ran. Move process to a different queue if it is still running/ready.
-	    processDispatchedNext = dequeue(&queue[queueLevel]);
+  
+//	    printAllFeedbackQueues(queue);
 
-	    if (receiveBuffer.quantumData > 0) {
-	       
-	       // POSSIBLE EMPTY QUEUE CONDITIONAL.
-	       
-               if (queueLevel < 2) {
-	          enqueue(&queue[++queueLevel], processDispatchedNext);
-	       }
-	       else if (queueLevel == 2) {
-	          enqueue(&queue[queueLevel], processDispatchedNext);
-	       }
 
+
+            // If user.c passes back a partial time quantum, let user know.
+            if (sendBuffer.quantumData != receiveBuffer.quantumData && receiveBuffer.quantumData > 0) {
+               printf("**OSS: Did not use its entire time quantum**\n");
+               fprintf(logOutputFP, "**OSS: Did not use its entire time quantum**\n");
+
+
+               // BLOCKED QUEUE OPERATIONS.
             }
+
+	    // If the user process sends back a negative number for a time quantum, end child process.
+            if (sendBuffer.quantumData != receiveBuffer.quantumData && receiveBuffer.quantumData < 0) {
+               pid_t pid;
+               removeFromProcessTable(sendBuffer.messageType);
+
+               printf("---OSS: User #%d PID %ld is planning to terminate.---\n\n", nextChild, sendBuffer.messageType);
+               fprintf(logOutputFP, "---OSS: User #%d PID %ld is planning to terminate.---\n\n", nextChild, sendBuffer.messageType);
+               printProcessTable();
+	       //               dequeue(&queue[queueLevel]);
+
+	       if (isQueueEmpty(&queue[queueLevel]) == false) {
+	          printf("Attempting to terminate...\n\n");
+		  printAllFeedbackQueues(queue);
+	          dequeue(&queue[queueLevel]);
+		  printf("Success\n\n");
+		  printf("totalChildrenLaunched (termination): %d\n", totalChildrenLaunched);
+		  printAllFeedbackQueues(queue);
+               }
+//               printf("plannedTerminations: %d\n", plannedTerminations);
+               plannedTerminations++;
+               printf("plannedTerminations: %d\n", plannedTerminations);
+
+	       processDispatchedNext = peekQueue(&queue[queueLevel]);
+               nextChild = findIndexInProcessTable(processDispatchedNext);
+
+
+	       if (processDispatchedNext < 0) {
+	          break;
+	       }
+	       printf("processDispatchedNext (after process termination): %d\n", processDispatchedNext);
+               //fflush(logOutputFP);
+               continue;
+            }
+         
+             // Schedules the next process. If queue is empty, (sdfsdfsdf)
+        /******/
+           /* if (isQueueEmpty(&queue[queueLevel]) == false) {
+               printf("processDispatchedNext (isQueueEmpty, peekQueue()): %d\n", processDispatchedNext);
+               processDispatchedNext = peekQueue(&queue[queueLevel]);
+            }
+            if (processDispatchedNext <= 0) {
+               printf("processDispatchedNext <= 0 (peekQueue()): %d\n", processDispatchedNext);
+
+               //processDispatchedNext = sendBuffer.messageType;
+            }i
+
+*/
+
+ 
+	   
+	   
+ // Schedules the next process. If queue is empty, (sdfsdfsdf)
+        
+
+
+	       // POSSIBLE EMPTY QUEUE CONDITIONAL.
+	  if (isQueueEmpty(&queue[queueLevel]) == false) {
+	     dequeue(&queue[queueLevel]);  
+	  }
+	          
+         if (queueLevel < 2) {
+            enqueue(&queue[++queueLevel], processDispatchedNext);
             printAllFeedbackQueues(queue);
-	    
-
-	    // If user.c passes back a partial time quantum, let user know.
-	    if (sendBuffer.quantumData != receiveBuffer.quantumData && receiveBuffer.quantumData > 0) {	       
-	       printf("**OSS: Did not use its entire time quantum**\n");
-	       fprintf(logOutputFP, "**OSS: Did not use its entire time quantum**\n");
-
-
-	       // BLOCKED QUEUE OPERATIONS.
-	    }
-
-
-            // Schedules the next process. If queue is empty, (sdfsdfsdf) 
-	    processDispatchedNext = peekQueue(&queue[queueLevel]);
-
-	    if (processDispatchedNext <= 0) {
-	       processDispatchedNext = sendBuffer.messageType;
-	    }
-
+         }
+	 else if (queueLevel == 2) {
+            enqueue(&queue[queueLevel], processDispatchedNext);	 
+         }
+	       
+           
+           
 
 	    // Add accumulating schedule time info to the process table.
-	    addServiceTimeToProcessTable(nextChild);
-	       
-	       
-	    // If the user process sends back a negative number for a time quantum, end child process.
-	    if (receiveBuffer.quantumData < 0) {
-	       pid_t pid;
-	       removeFromProcessTable(receiveBuffer.messageType);
-	  
-	       printf("---OSS: User #%d PID %ld is planning to terminate.---\n\n", nextChild, receiveBuffer.messageType);
-	       fprintf(logOutputFP, "---OSS: User #%d PID %ld is planning to terminate.---\n\n", nextChild, receiveBuffer.messageType);
-               fflush(logOutputFP);  	  
-
-	       plannedTerminations++;
-                  		  
-	       fflush(logOutputFP);
-	       continue;
-            }
+	    childWithServiceTime = findIndexInProcessTable(sendBuffer.messageType);
+	    printf("addServiceTime: %ld\n\n", sendBuffer.messageType);
+	    addServiceTimeToProcessTable(childWithServiceTime);
 	 }
+
+	 
 	 
          if (iterationBeforeBreak == nextChild - 1) {
             iterationBeforeBreak = 0;
          }
    
+	 if (totalChildrenLaunched == plannedTerminations) {
+            proc = plannedTerminations;
+	 }
+	 
 	 // If no more children are running and the maximum # of total children have been launched, end loop/program.
          if (childrenActive == 0 && totalChildrenLaunched == proc) {
             processesFinished = true;
@@ -489,10 +647,12 @@ int main(int argc, char** argv) {
          if (childrenActive == simul && totalChildrenLaunched < proc) {
             int status;
             pid_t pid;
-
+           
+	    //printf("if (childrenActive = simul && totalChildrenLaunched < proc)\n");
             while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
                removeFromProcessTable(pid);
-               childrenActive--;
+	       printAllFeedbackQueues(queue);
+	       childrenActive--;
 	       
 	       nextLaunchTimeNano = determineNextLaunchNanoseconds(maxTimeBetweenNewProcsNS, systemNanoOnly);
 
@@ -509,10 +669,11 @@ int main(int argc, char** argv) {
             while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
                removeFromProcessTable(pid);
 	       childrenActive--;
+
             }
          }
 
-	 
+         	 
 	 // Break if it is time to launch a new process.
          if (systemNanoOnly >= nextLaunchTimeNano && totalChildrenLaunched < proc) {
             break;
@@ -522,8 +683,10 @@ int main(int argc, char** argv) {
          if (plannedTerminations == totalChildrenLaunched) {
             break;
          }
-
-	 // Break if it is time to terminate the program.
+         if (processDispatchedNext < 0) {
+            //break;
+	 }
+         // Break if it is time to terminate the program.
          if (childrenActive == 0 && totalChildrenLaunched == proc) {
 	    queueEmpty = true;    
             break;
@@ -590,11 +753,13 @@ bool isQueueEmpty(MultiLevelQueue *queue) {
 
 // Add process to back of queue.
 void enqueue(MultiLevelQueue *queue, pid_t pid) {
-   if (queue->rear >= MAX_SIZE) {
-      printf("ERROR in oss.c: enqueue() function failed. Cannot add PID to queue.\n");
+   if (queue->rear >= MAX_SIZE - 1) { 
+      printf("ERROR in oss.c: enqueue() function failed. Queue overflow occurred.\n");
       
       periodicallyTerminateProgram(-1);
    }
+
+   slowDownProgram();
 
    if (isQueueEmpty(queue) == true) {
       queue->front = 0;
@@ -603,7 +768,7 @@ void enqueue(MultiLevelQueue *queue, pid_t pid) {
    else {
       queue->rear++;
    }
-
+ 
    queue->processEntries[queue->rear] = pid;
 }
 
@@ -616,14 +781,14 @@ pid_t dequeue(MultiLevelQueue *queue) {
       periodicallyTerminateProgram(-1);
    }   
 
+   slowDownProgram(); 
+
    pid_t processID = queue->processEntries[queue->front];
+   //queue->front = (queue->front + 1) % MAX_SIZE;
+ 
+ //  queue->rear--;
 
-   int i;
-   for (i = queue->front; i < queue->rear; i++) {
-      queue->processEntries[i] = queue->processEntries[i + 1];
-   }
-
-   queue->rear--;
+   queue->front++;
 
    if (queue->front > queue->rear) {
       initializeFeedbackQueue(queue);
@@ -729,6 +894,14 @@ int determineDispatchTime () {
    int timeSpentInDispatch = rand() % (10000 - 1000 + 1) + 1000;
 
    return timeSpentInDispatch;
+}
+
+
+void slowDownProgram() {
+   int i;
+   for (i = 0; i < 50000; i++) {
+      // Do nothing.
+   }
 }
 
 
@@ -884,11 +1057,16 @@ void printProcessTableToLogfile() {
 
 
 void sendMessageToUSER() {
+   
+printf("From sendMessageToUSER: messageBuffer.messageType: %ld\n", sendBuffer.messageType);
+	
    if (msgsnd(messageQueueID, &sendBuffer, sizeof(messageBuffer) - sizeof(long int), 0) == -1) {
       printf("ERROR in oss.c: Problem with msgsnd() function.\n");
       printf("Cannot send message to user.c.\n\n");
 
       periodicallyTerminateProgram(-1);
+
+      //printf("From sendMessageToUSER: messageBuffer.messageType: %ld\n", sendBuffer.messageType);
    }
 }
 
