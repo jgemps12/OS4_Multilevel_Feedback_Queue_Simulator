@@ -141,6 +141,7 @@ long long int incrementClock(int *, long long int *, int);
 long long int convertSystemTimeToNanosecondsOnly (int *, long long int *); 
 long long int determineNextLaunchNanoseconds(long long int, long long int);
 int determineDispatchTime();
+int determineTimeQuantum(int);
 void slowDownProgram();
 
 // For process table operations.
@@ -239,12 +240,10 @@ int main(int argc, char** argv) {
 
    // Initialize each queue for multilevel feedback scheduling.
    MultiLevelQueue queue[QUEUE_COUNT];
-
    int i;
    for (i = 0; i < QUEUE_COUNT; i++) {
       initializeFeedbackQueue(&queue[i]);
    }
-
 
 
    // Time quanta for each queue level (10, 20, and 40 ms respectively).
@@ -366,9 +365,6 @@ int main(int argc, char** argv) {
            realMicroseconds = realCurrentTime.tv_usec - realStartTime.tv_usec;
 
 
-
-	    printf("realSeconds: %ld\t totalChildrenLaunched: %d\n", realSeconds, totalChildrenLaunched);
-          
 	    if (addToProcessTable(processID) == -1) {
                printf("ERROR in oss.c: Process Control Block (PCB) table is full.\n");
                printf("Cannot add PID %d\n", processID);
@@ -407,16 +403,13 @@ int main(int argc, char** argv) {
 	 // Print process table every half second of simulated system time. 
          long long int lastPrintoutTime = (lastTablePrintSeconds * oneBillionNanoseconds) + lastTablePrintNano;
             
-	 if (systemNanoOnly - lastPrintoutTime >= halfBillionNanoseconds) {
-            //printAllFeedbackQueues(queue);	    
+	 if (systemNanoOnly - lastPrintoutTime >= halfBillionNanoseconds) {	    
             printProcessTable();
 
             lastTablePrintSeconds = systemClockSeconds;
             lastTablePrintNano = systemClockNano;
          }   
-        
-//	 printProcessTable();
-	  
+         
 	 if (processTable[nextChild].occupied == 1) {	    
 	    
             // A buffer stores information about what will be sent to a child.
@@ -439,9 +432,12 @@ int main(int argc, char** argv) {
 
             }
 
-	    // ** 10 ms time quantum sent to child.
-	    sendBuffer.quantumData = highPriorityQuantum;   
+	    // 10, 20, or 40 ms time quantum sent to child.
+	    sendBuffer.quantumData = determineTimeQuantum(queueLevel);
 	    snprintf(sendBuffer.stringData, sizeof(sendBuffer.stringData), "Message sent to child %d again. Child is still running.", nextChild);
+
+
+
 
 	    // Parent process sends a message to a child process. Output printed to a logfile.
 	    sendMessageToUSER();
@@ -507,7 +503,7 @@ int main(int argc, char** argv) {
 	    // Slow down program to prevent race conditions between times in Process Table and those analyzed in user.c.
 	    // Also prevents multiple empty Process Tables from printing towards the program's end.
 	    int i; 
-            for (i = 0; i < 2000000 * totalChildrenLaunched; i++) {
+            for (i = 0; i < 5000000 * totalChildrenLaunched; i++) {
                // Do nothing.
             }  
            
@@ -516,7 +512,7 @@ int main(int argc, char** argv) {
             // Another buffer stores info about what the parent receives from a child.
             //receiveBuffer.messageType = processTable[nextChild].processID;
             receiveBuffer.messageType = sendBuffer.messageType;
-	    receiveBuffer.quantumData = highPriorityQuantum;
+	    receiveBuffer.quantumData = determineTimeQuantum(queueLevel);
 
 	    // Parent process receives a message from a child process. Output printed to a logfile.
 	    receiveMessageFromUSER(nextChild);
@@ -524,20 +520,14 @@ int main(int argc, char** argv) {
 
 	    // Increment clock based on a child's scheduled time.
             int absoluteValueQuantData = abs(receiveBuffer.quantumData);
-	    systemClockIncrement = incrementClock(&systemClockSeconds, &systemClockNano, absoluteValueQuantData);
-
-
-	    if (receiveBuffer.quantumData == 0) {
-	    //   receiveBuffer.quantumData = highPriorityQuantum;
-	    }
-
+	    systemClockIncrement = incrementClock(&systemClockSeconds, &systemClockNano, absoluteValueQuantData);	   
 	    // Prints duration of time that a process was scheduled.
 	    printf("OSS: Receiving that process with PID %ld ran for %ld nanoseconds\n", sendBuffer.messageType, receiveBuffer.quantumData);
             fprintf(logOutputFP, "OSS: Receiving that process with PID %ld ran for %ld nanoseconds\n", receiveBuffer.messageType, receiveBuffer.quantumData);
   
-//	    printAllFeedbackQueues(queue);
+	    printAllFeedbackQueues(queue);
 
-
+            printf("sendBuffer.quantumData: %ld\t receiveBuffer.quantumData: %ld\n\n", sendBuffer.quantumData, receiveBuffer.quantumData);
 
             // If user.c passes back a partial time quantum, let user know.
             if (sendBuffer.quantumData != receiveBuffer.quantumData && receiveBuffer.quantumData > 0) {
@@ -683,9 +673,7 @@ int main(int argc, char** argv) {
          if (plannedTerminations == totalChildrenLaunched) {
             break;
          }
-         if (processDispatchedNext < 0) {
-            //break;
-	 }
+         
          // Break if it is time to terminate the program.
          if (childrenActive == 0 && totalChildrenLaunched == proc) {
 	    queueEmpty = true;    
@@ -875,8 +863,6 @@ long long int convertSystemTimeToNanosecondsOnly(int *seconds, long long int *na
 
 // Generates a value between 1 and [timeLimitForChildren].
 int randomizeChildSecondsLimit(int childTimeLimit) {
-   //srand(time(NULL) ^ getpid());
-
    return (rand() % childTimeLimit) + 1;
 }
 
@@ -897,6 +883,27 @@ int determineDispatchTime () {
 }
 
 
+// Return the correct time quantum based on queue level.
+int determineTimeQuantum(int queueLevel) {
+   long int timeQuantum;
+
+   // HIGH PRIORITY
+   if (queueLevel == 0) {
+      timeQuantum = 10 * oneMillionNanoseconds;
+   }
+   // MEDIUM PRIORITY
+   else if (queueLevel == 1) {
+      timeQuantum = 20 * oneMillionNanoseconds;
+   }
+   // LOW PRIORITY
+   else if (queueLevel == 2) {
+      timeQuantum = 40 * oneMillionNanoseconds; 
+   }
+
+   return timeQuantum;
+}
+
+// Attempts to prevent race conditions from occurring during message transfers,
 void slowDownProgram() {
    int i;
    for (i = 0; i < 50000; i++) {
