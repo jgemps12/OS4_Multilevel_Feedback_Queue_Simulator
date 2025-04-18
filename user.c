@@ -63,6 +63,7 @@ void initializeMessageQueue();
 int determineProcessSelection(int);
 void sendMessageToOSS();
 void receiveMessageFromOSS();
+void slowDownProgram();
 
 
 int main(int argc, char** argv) {
@@ -90,7 +91,7 @@ int main(int argc, char** argv) {
    
    
    // processSelection uses numbers 1-3 to determine child process's outcome.
-   // probabilityValue randomly chooses between 1 and 100 to determine processSelection value.
+   // probabilityValue randomly chooses between 1 and 1000 to determine processSelection value.
    srand(time(NULL) ^ getpid());
 
    int probabilityValue = 0;
@@ -100,13 +101,11 @@ int main(int argc, char** argv) {
 
    initializeMessageQueue();
 
-
+   
    do {
       // Receives a message from the parent.
       receiveMessageFromOSS();
 
-      //printf("\nreceiveBuffer.quantumData (from user.c): %ld\n", receiveBuffer.quantumData);
-      
 
       // Compare # of seconds before and after shared memory is re-read.
       int secondsBeforeMemRead = systemClockSeconds;                                              // Before read.
@@ -118,9 +117,9 @@ int main(int argc, char** argv) {
 
       // Slow down program to prevent race conditions between Process Table and printf() message times (for oss.c and user.c, respectively).
       int i;
-  ///    for (i = 0; i < 100000; i++) {
+      for (i = 0; i < 100000000; i++) {
          //  Do nothing.
-     // }
+      }
 
       probabilityValue = (rand() % 100) + 1;
       processSelection = determineProcessSelection(probabilityValue);
@@ -129,9 +128,10 @@ int main(int argc, char** argv) {
       switch (processSelection) {       
 	 // If child process runs for its ENTIRE time quantum.
 	 case 1:
-            sendBuffer.messageType = getpid();
-            sendBuffer.quantumData = 10000000;
-
+            //sendBuffer.messageType = getpid();
+	    sendBuffer.messageType = receiveBuffer.messageType;
+            sendBuffer.quantumData = receiveBuffer.quantumData;
+ 
             sendMessageToOSS();
 
 	    break;
@@ -139,11 +139,11 @@ int main(int argc, char** argv) {
 
 	 // If child process runs for PART of its time quantum, but then becomes interrupted and BLOCKED.
 	 case 2:
-            //srand(time(NULL) ^ getpid());
-	    timeQuantumFraction = rand() % (99 + 1);
+	    timeQuantumFraction = (rand() % 99) + 1;
 
-            sendBuffer.messageType = getpid();
-            sendBuffer.quantumData = (timeQuantumFraction * 10000000) / 100;
+           // sendBuffer.messageType = getpid();
+            sendBuffer.messageType = receiveBuffer.messageType;
+	    sendBuffer.quantumData = (timeQuantumFraction * receiveBuffer.quantumData) / 100;
 
             sendMessageToOSS();
 
@@ -152,11 +152,11 @@ int main(int argc, char** argv) {
 
 	 // If child process runs for PART of its time quantum, but then becomes TERMINATED.
 	 case 3:
-	   // srand(time(NULL) ^ getpid());
-            timeQuantumFraction = rand() % (99 + 1);
+            timeQuantumFraction = (rand() % 99) + 1;
 
-	    sendBuffer.messageType = getpid();
-            sendBuffer.quantumData = (-1 * timeQuantumFraction * 10000000) / 100;
+	    //sendBuffer.messageType = getpid();
+            sendBuffer.messageType = receiveBuffer.messageType;
+	    sendBuffer.quantumData = (-1 * timeQuantumFraction * receiveBuffer.quantumData) / 100;
 
             sendMessageToOSS();
 	    
@@ -203,17 +203,17 @@ int determineProcessSelection (int probabilityValue) {
    int selection;                            
 
    // Process runs full time quantum.
-   if (probabilityValue >= 1 && probabilityValue <= 94) {
+   if (probabilityValue >= 1 && probabilityValue <= 90) {
       selection = 1;
    }
 
    // Process runs part of quantum, but gets blocked.
-   else if (probabilityValue >= 95 && probabilityValue <= 99) {
+   else if (probabilityValue >= 91 && probabilityValue <= 96) {  
       selection = 2;
    }
 
    // Process runs part of quantum, but gets terminated.
-   else if (probabilityValue == 100) {
+   else if (probabilityValue >= 97 && probabilityValue <= 100) {
       selection = 3;
    }
 
@@ -224,6 +224,8 @@ int determineProcessSelection (int probabilityValue) {
 
 // msgsnd() operations.
 void sendMessageToOSS() {
+   slowDownProgram();
+   
    if (msgsnd(messageQueueID, &sendBuffer, sizeof(messageBuffer) - sizeof(long int), 0) == -1) {
       printf("ERROR in user.c: Problem with msgsnd() function.\n");
       printf("Cannot send message to oss.c.\n\n");
@@ -235,10 +237,19 @@ void sendMessageToOSS() {
 
 // msgrcv() operations.
 void receiveMessageFromOSS() {
+   slowDownProgram();
+	
    if (msgrcv(messageQueueID, &receiveBuffer, sizeof(messageBuffer), getpid(), 0) == -1) {
       printf("ERROR in user.c: Problem with msgrcv() function.\n");
       printf("Cannot receive message from oss.c.\n\n");
 
       exit(-1);
+   }
+}
+
+void slowDownProgram() {
+   int i;
+   for (i = 0; i < 10000000; i++) {
+      //  Do nothing.
    }
 }
