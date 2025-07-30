@@ -1,10 +1,10 @@
-CC	= g++ -g3
-CFLAGS	= -g3
-TARGET1	= user
+CC      = g++ -g3
+CFLAGS  = -g3
+TARGET1 = user
 TARGET2 = oss
 
 OBJS1   = user.o
-OBJS2   = oss.o
+OBJS2   = oss.o functions.o
 
 all:	$(TARGET1) $(TARGET2)
 
@@ -14,11 +14,14 @@ $(TARGET1): $(OBJS1)
 $(TARGET2): $(OBJS2)
 	$(CC) -o $(TARGET2) $(OBJS2)
 
-user.o:	user.c
+user.o:       user.c
 	$(CC) $(CFLAGS) -c user.c
 
-oss.o:	oss.c
+oss.o:          oss.c functions.h
 	$(CC) $(CFLAGS) -c oss.c
+
+functions.o:    functions.c functions.h
+	$(CC) $(CFLAGS) -c functions.c
 
 
 clean:
