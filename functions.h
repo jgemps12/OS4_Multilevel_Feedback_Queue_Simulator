@@ -18,6 +18,82 @@
 // For memory queue.
 #define PERMISSIONS 0644
 
+// Starting a multilevel feedback queue.
+#define MAX_SIZE 1000
+#define QUEUE_COUNT 4
+
+
+/*********************************STRUCTS************************************/
+// For process table operations.
+struct PCB {
+   int occupied;                            // Is the entry in the process table empty (0) or full (1)?
+   pid_t processID;                         // Child's process ID.
+   int startSeconds;                        // Time when a process FORKED (in seconds).
+   long int startNanoseconds;               // Time when a process FORKED (in nanoseconds).
+   int serviceTimeSeconds;                  // Total time when a process was SCHEDULED (in seconds).
+   long int serviceTimeNanoseconds;         // Total time when a process was SCHEDULED (in nanoseconds).
+   int eventWaitSeconds;                    // Time when a process becomes UNBLOCKED (in seconds).
+   long long int eventWaitNanoseconds;      // Time when a process becomes UNBLOCKED (in nanoseconds).
+   int blocked;                             // Is the process blocked (1) or unblocked (0)?
+};
+extern struct PCB processTable[PROCESS_COUNT];
+
+// Sets up for different queues for multilevel feedback scheduling.
+typedef struct MultiLevelQueue {
+   int processEntries[MAX_SIZE];
+   int front;
+   int rear;
+} MultiLevelQueue;
+
+// Holds message queue information.
+typedef struct messageBuffer {
+   long int messageType;
+   char stringData[100];
+   long int quantumData;
+} messageBuffer;
+
+/****************************GLOBAL VARIABLES********************************/
+// For log file operations.
+extern char logfile[105];
+extern char suffix[];
+extern FILE *logOutputFP;
+extern char *logfileFP;
+
+// For shared memory operations.
+extern int secondsShmid;
+extern long int nanoShmid;
+extern int logfileShmid;
+
+// For message buffer operations.
+extern messageBuffer sendBuffer;
+extern messageBuffer receiveBuffer;
+extern int messageQueueID;
+extern key_t key;
+
+// For system clock operations.
+extern int systemClockSeconds;
+extern long long int systemClockNano;
+extern long long int systemNanoOnly;
+extern long int systemClockIncrement;
+
+// For system clock sharing between processes.
+extern int *secondsShared;
+extern long int *nanosecondsShared;
+
+// For time conversions.
+extern long int oneMillionNanoseconds;
+extern long int halfBillionNanoseconds;
+extern long int oneBillionNanoseconds;
+extern long int oneQuarterSecond;
+extern long int hundredMS;
+
+// For process table operations. 
+extern int lastTablePrintSeconds;
+extern long int lastTablePrintNano;
+
+// For feedback queue operations.
+extern int currentChildIndex;
+
 
 /*************************FUNCTION PROTOTYPES********************************/
 //For initialization.
@@ -64,3 +140,5 @@ void detachAndClearSharedMemory();
 void removeMessageQueue();
 void periodicallyTerminateProgram(int);
 
+
+#endif
