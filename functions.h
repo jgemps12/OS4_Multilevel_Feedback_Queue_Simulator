@@ -45,6 +45,14 @@ typedef struct MultiLevelQueue {
    int rear;
 } MultiLevelQueue;
 
+// Enumerates queue levels. 
+enum Level {
+   HIGH_PRIORITY,
+   MED_PRIORITY,
+   LOW_PRIORITY,
+   BLOCKED
+};
+
 // Holds message queue information.
 typedef struct messageBuffer {
    long int messageType;
@@ -116,6 +124,7 @@ long long int determineNextLaunchNanoseconds(long long int, long long int);
 int determineDispatchTime();
 long long int determineEventWaitTime(int, int, long long int);
 int determineTimeQuantum(int);
+void incrementIfAllChildrenAreBlocked();
 void slowDownProgram();
 
 // For process table operations.
@@ -123,7 +132,7 @@ int addToProcessTable(pid_t);
 int findIndexInProcessTable(pid_t);
 void addServiceTimeToProcessTable(int);
 void addWaitTimeToProcessTable(long long int, int);
-void possiblyUnblockChild(MultiLevelQueue *);
+int possiblyUnblockChild(MultiLevelQueue *);
 void removeFromProcessTable(pid_t);
 void printProcessTable();
 void printProcessTableToLogfile();
