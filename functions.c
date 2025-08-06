@@ -219,6 +219,26 @@ int determineTimeQuantum(int queueLevel) {
    return timeQuantum;
 }
 
+void incrementIfAllChildrenAreBlocked() {
+   int i;
+   int emptyRows = 0;
+   for (i = 0; i < 20; i++) {
+      if (processTable[i].occupied == 1 && processTable[i].blocked == 0) {
+         return;
+      }
+      if (processTable[i].occupied == 0) {
+         emptyRows++;
+      }
+   }
+   
+   if (emptyRows < 20) {   
+      printf("ALL CHILDREN ARE BLOCKED!!\n\n");
+      systemClockIncrement = incrementClock(&systemClockSeconds, &systemClockNano, hundredMS);
+      *secondsShared = systemClockSeconds;
+      *nanosecondsShared = systemClockNano;
+   }
+}
+
 // Attempts to prevent race conditions from occurring during message transfers,
 void slowDownProgram() {
    int i;
@@ -286,10 +306,12 @@ void addWaitTimeToProcessTable(long long int waitTime, int i) {
    }
 }
 
-void possiblyUnblockChild(MultiLevelQueue *queue) {
+int possiblyUnblockChild(MultiLevelQueue *queue) {
    long long int eventWaitNanoOnly;
    long int dequeuedChild;
    int i;
+
+   incrementIfAllChildrenAreBlocked();
 
    for (i = 0; i < 20; i++) {
       eventWaitNanoOnly = (processTable[i].eventWaitSeconds * oneBillionNanoseconds) + processTable[i].eventWaitNanoseconds;
@@ -299,17 +321,27 @@ void possiblyUnblockChild(MultiLevelQueue *queue) {
 	 processTable[i].eventWaitNanoseconds = 0;
          processTable[i].blocked = 0;
 
+	 // Keep dequeuing from blocked queue until for-loop finds a match.
          while (dequeuedChild != processTable[i].processID) {
 	    dequeuedChild = dequeue(&queue[3]);
 
-	    if (dequeuedChild == processTable[i].processID) {
-	       break;
+	    if (dequeuedChild == processTable[i].processID && processTable[i].occupied == 1) {
+               printf("Return child #%d...\n", i);
+               enqueue(&queue[0], processTable[i].processID);
+
+
+     	       return i;
 	    }
 	    enqueue(&queue[3], dequeuedChild);
-	 }
-	 enqueue(&queue[0], processTable[i].processID);
-      }
+         }
+      }   
+      
    }
+   printAllFeedbackQueues(queue);
+
+   printf("Return -1\n");
+
+   return -1;
 }
 
 void removeFromProcessTable(pid_t pid) {
