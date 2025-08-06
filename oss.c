@@ -78,7 +78,7 @@ int currentChildIndex = 0;
 int main(int argc, char** argv) {
    int opt;
    strcpy(logfileFP, logfile);
-
+;
    // Hardcoded values (that used to be user options).
    int proc = 10;
    int simul = 10;
@@ -251,7 +251,7 @@ int main(int argc, char** argv) {
 	 if (processID > 0 && realSeconds < 10) {
             
             // Always start new processes in the high-priority queue.
-            queueLevel = 0; 	
+            queueLevel = HIGH_PRIORITY; 	
 	    processDispatchedNext = processID;
 	   
 	    childrenActive++;
@@ -283,12 +283,21 @@ int main(int argc, char** argv) {
     
       // While-loop determines which child needs to be scheduled.
       while (1) {
+	 queueLevel = HIGH_PRIORITY;
 	 unblockedChild = possiblyUnblockChild(queue); 
 
          if (unblockedChild >= 0) {
             processDispatchedNext = processTable[unblockedChild].processID;
 	    nextChild = unblockedChild;
-	    queueLevel = 0;
+	 }
+
+	 // Search all queues (high-->low) until it finds one with a process in it.
+	 while (isQueueEmpty(&queue[queueLevel]) == true) {
+            queueLevel++;
+
+	    if (isQueueEmpty(&queue[queueLevel]) == false || queueLevel == LOW_PRIORITY) {
+	       break;
+	    }
 	 }
 	 
 	 // Print process table every half second of simulated system time. 
@@ -370,7 +379,7 @@ int main(int argc, char** argv) {
                   
 	          dequeue(&queue[queueLevel]);
 	          slowDownProgram();
-		  enqueue(&queue[3], receiveBuffer.messageType);
+		  enqueue(&queue[BLOCKED], receiveBuffer.messageType);
 
                   printf("OSS: Putting process with PID %ld into blocked queue.\n", receiveBuffer.messageType);
                   fprintf(logOutputFP, "OSS: Putting process with PID %ld into blocked queue.\n", receiveBuffer.messageType);
@@ -438,13 +447,13 @@ int main(int argc, char** argv) {
 	       }
 	       
 	       // Move process to a lower priority queue.   
-               if (queueLevel < 2) {
-                  enqueue(&queue[++queueLevel], processDispatchedNext);
+               if (queueLevel < LOW_PRIORITY) {
+	          enqueue(&queue[++queueLevel], processDispatchedNext);
                   printAllFeedbackQueues(queue);
                }
 
 	       // After process runs in low priority queue, place in the back of it.
-	       else if (queueLevel == 2) {
+	       else if (queueLevel == LOW_PRIORITY) {
 		  slowDownProgram();
                   enqueue(&queue[queueLevel], processDispatchedNext);	 
                }
