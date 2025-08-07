@@ -60,16 +60,14 @@ long int halfBillionNanoseconds = 500000000;
 long int oneBillionNanoseconds = 1000000000;
 long int oneQuarterSecond = 250000000;
 long int hundredMS = 100000000;
+long int systemClockIncrement = hundredMS;
 
 // Initialization of simulated system time. Increments whenever a scheduling event occurs.
 int systemClockSeconds = 0;
 long long int systemClockNano = 0;
 long long int systemNanoOnly = 0;                                
-
 int lastTablePrintSeconds = 0;
 long int lastTablePrintNano = 0;
-
-long int systemClockIncrement = hundredMS;
 
 // For determining the child process order in which messages are to be sent.
 int currentChildIndex = 0;
@@ -78,7 +76,7 @@ int currentChildIndex = 0;
 int main(int argc, char** argv) {
    int opt;
    strcpy(logfileFP, logfile);
-;
+
    // Hardcoded values (that used to be user options).
    int proc = 10;
    int simul = 10;
@@ -101,7 +99,6 @@ int main(int argc, char** argv) {
 
    // User option for entering a logfile name.
    char logfileName[] = "-f [logfile]";
-
    
    while ((opt = getopt(argc, argv, "hf:")) != -1) {
       switch (opt) {
@@ -146,8 +143,14 @@ int main(int argc, char** argv) {
    int queueLevel = 0;
    int blocked = 0;
    int unblockedChild = -1;
-
    pid_t processDispatchedNext;
+
+   // Variables used for program summary/statistics at the end.
+   long long int readyStateTime = 0;
+   long long int blockedStateTime = 0;
+   long long int idleStartTime = 0;
+   long long int idleEndTime = 0;
+   long long int totalIdleTime = 0;
 
    // Initialize shared memory segments.
    *secondsShared = 0;
@@ -177,12 +180,11 @@ int main(int argc, char** argv) {
    signal(SIGTERM, periodicallyTerminateProgram);
    alarm(60);
 
-
    while (processesFinished == false) {
       // If children are still available to launch simultaneously.
       if (childrenActive < simul && totalChildrenLaunched < proc) {
          pid_t processID;
-              
+          
          // Keeps incrementing system clock until a process is ready to launch.
          while (realSeconds < 10) {
            gettimeofday(&realCurrentTime, NULL);        
@@ -240,6 +242,7 @@ int main(int argc, char** argv) {
             *secondsShared = systemClockSeconds;
             *nanosecondsShared = systemClockNano;
 
+
 	    // Run child processes.
 	    execl("./user", "user", NULL);
 
@@ -249,7 +252,14 @@ int main(int argc, char** argv) {
 
          // Work with parent process. Send a message to a running child process.
 	 if (processID > 0 && realSeconds < 10) {
-            
+            if (plannedTerminations == totalChildrenLaunched) {
+               long long int difference = 0;
+               idleEndTime = systemNanoOnly;
+	       difference = calculateIdleTime(idleStartTime, idleEndTime);
+
+               totalIdleTime += calculateIdleTime(idleStartTime, idleEndTime);
+	    }
+	    
             // Always start new processes in the high-priority queue.
             queueLevel = HIGH_PRIORITY; 	
 	    processDispatchedNext = processID;
@@ -295,8 +305,15 @@ int main(int argc, char** argv) {
 	 while (isQueueEmpty(&queue[queueLevel]) == true) {
             queueLevel++;
 
-	    if (isQueueEmpty(&queue[queueLevel]) == false || queueLevel == LOW_PRIORITY) {
+	    if (isQueueEmpty(&queue[queueLevel]) == false) {
 	       break;
+	    }
+	    if (queueLevel == LOW_PRIORITY) {
+               if (isQueueEmpty(&queue[BLOCKED]) == false) {
+	          totalIdleTime += hundredMS;
+	       }
+	       break;
+	       
 	    }
 	 }
 	 
@@ -394,6 +411,9 @@ int main(int argc, char** argv) {
                   long long int unblockTime = determineEventWaitTime(maxWaitTimeSeconds, maxWaitTimeMS, systemNanoOnly);	   
                   addWaitTimeToProcessTable(unblockTime, nextChild);
 
+		  blockedStateTime += calculateBlockedStateTime(systemNanoOnly, nextChild);
+                  sleep(3);
+
 		  // Find child to schedule next.
 	          processDispatchedNext = peekQueue(&queue[queueLevel]);
                   nextChild = findIndexInProcessTable(processDispatchedNext);
@@ -412,11 +432,13 @@ int main(int argc, char** argv) {
 
 		  printf("**OSS: Did not use its entire time quantum**\n");
                   fprintf(logOutputFP, "**OSS: Did not use its entire time quantum**\n");
-
+ 
+		  readyStateTime += calculateReadyStateTime(systemNanoOnly, nextChild);	  
                   removeFromProcessTable(sendBuffer.messageType);
 
                   printf("---OSS: User #%d PID %ld is planning to terminate.---\n\n", nextChild, sendBuffer.messageType);
                   fprintf(logOutputFP, "---OSS: User #%d PID %ld is planning to terminate.---\n\n", nextChild, sendBuffer.messageType);
+
 
 		  // Delete process from whatever queue it was in before terminating.
   	          if (isQueueEmpty(&queue[queueLevel]) == false) {
@@ -425,8 +447,10 @@ int main(int argc, char** argv) {
 
 		     printAllFeedbackQueues(queue);
                   }
+		  
+		  idleStartTime = systemNanoOnly;
                   plannedTerminations++;
-             
+
                   // Find child to schedule next.
 	          processDispatchedNext = peekQueue(&queue[queueLevel]);
                   nextChild = findIndexInProcessTable(processDispatchedNext);
@@ -465,7 +489,7 @@ int main(int argc, char** argv) {
 	 } 
 	 
          if (iterationBeforeBreak == nextChild - 1) {
-               iterationBeforeBreak = 0;
+            iterationBeforeBreak = 0;
          }
    
 	 if (totalChildrenLaunched == plannedTerminations) {
@@ -516,16 +540,21 @@ int main(int argc, char** argv) {
          }
          
          // Break if it is time to terminate the program.
-         if (childrenActive == 0 && totalChildrenLaunched == proc) {   
+         if (childrenActive == 0 && totalChildrenLaunched == proc) {  
             break;
 	 }
       } 
    }
+
    printAllFeedbackQueues(queue);
-   printProcessTable();
-   
+   printProcessTable();  
    fclose(logOutputFP);
-   periodicallyTerminateProgram(EXIT_SUCCESS);
+   detachAndClearSharedMemory();
+   removeMessageQueue();
+
+   printf("Program successfully terminated.\n\n\n");
+
+   printProgramSummary(totalChildrenLaunched, blockedStateTime, readyStateTime, totalIdleTime);
 
    return EXIT_SUCCESS;
 }
