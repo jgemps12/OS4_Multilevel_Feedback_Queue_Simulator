@@ -144,9 +144,19 @@ void receiveMessageFromUSER(int);
 // For guiding the user.
 void printHelpMessage();
 
+// For program statistics operations.
+long long int calculateReadyStateTime(long long int, int);
+double getTotalReadyStateTime(long long int, int);
+long long int calculateBlockedStateTime(long long int, int);
+double getTotalBlockedStateTime(long long int, int);
+long long int calculateIdleTime(long long int, long long int);
+double getTotalIdleTime(long long int);
+double getUtilizationOfCPU(long long int);
+
 // For terminating the program.
 void detachAndClearSharedMemory();
 void removeMessageQueue();
+void printProgramSummary(int, long long int, long long int, long long int);
 void periodicallyTerminateProgram(int);
 
 
