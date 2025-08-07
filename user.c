@@ -1,7 +1,5 @@
 // The user.c file works with CHILD processes.
 // It prints out child and parent process IDs, as well as child process and termination times, to the user for each iteration.
-
-
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
@@ -11,7 +9,6 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <time.h>
-
 
 // Starting a memory segment for system clock seconds.
 #define SHMKEY1 42069
@@ -53,7 +50,6 @@ void slowDownProgram();
 
 
 int main(int argc, char** argv) {
-  
    // Creates two shared memory identifiers (and one for a log file).
    int secondsShmid = shmget(SHMKEY1, INT_BUFFER_SIZE, 0777);
    long int nanoShmid = shmget(SHMKEY2, LONG_BUFFER_SIZE, 0777);
@@ -90,9 +86,7 @@ int main(int argc, char** argv) {
       int secondsBeforeMemRead = systemClockSeconds;                                              // Before read.
       systemClockSeconds = *sharedSeconds;                                                        // During read.
       int secondsAfterMemRead = systemClockSeconds;                                               // After read.
-
       systemClockNano = *sharedNanoseconds;
-
 
       // Slow down program to prevent race conditions between Process Table and printf() message times (for oss.c and user.c, respectively).
       int i;
@@ -102,7 +96,6 @@ int main(int argc, char** argv) {
 
       probabilityValue = (rand() % 100) + 1;
       processSelection = determineProcessSelection(probabilityValue);
-  
       
       switch (processSelection) {       
 	 // If child process runs for its ENTIRE time quantum.
@@ -110,29 +103,22 @@ int main(int argc, char** argv) {
 	    sendBuffer.messageType = receiveBuffer.messageType;
             sendBuffer.quantumData = receiveBuffer.quantumData; 
             sendMessageToOSS();
-
 	    break;
 	 
-
 	 // If child process runs for PART of its time quantum, but then becomes interrupted and BLOCKED.
 	 case 2:
 	    timeQuantumFraction = (rand() % 99) + 1;
-
             sendBuffer.messageType = receiveBuffer.messageType;
 	    sendBuffer.quantumData = (timeQuantumFraction * receiveBuffer.quantumData) / 100;
             sendMessageToOSS();
-
             break;
-
 
 	 // If child process runs for PART of its time quantum, but then becomes TERMINATED.
 	 case 3:
             timeQuantumFraction = (rand() % 99) + 1;
-
             sendBuffer.messageType = receiveBuffer.messageType;
 	    sendBuffer.quantumData = (-1 * timeQuantumFraction * receiveBuffer.quantumData) / 100;
-            sendMessageToOSS();
-	    
+            sendMessageToOSS();    
 	    break;
       }
       if (processSelection == 3) {
@@ -157,7 +143,6 @@ void initializeMessageQueue() {
 
       exit(-1);
    }
-
    if ((messageQueueID = msgget(key, PERMISSIONS)) == -1) {
       printf("ERROR in user.c: problem with msgget() function.\n");
       printf("Cannot acquire a message queue ID for initialization.\n\n");
@@ -174,12 +159,10 @@ int determineProcessSelection (int probabilityValue) {
    if (probabilityValue >= 1 && probabilityValue <= 92) {
       selection = 1;
    }
-
    // Process runs part of quantum, but gets blocked.
    else if (probabilityValue >= 93 && probabilityValue <= 96) {  
       selection = 2;
    }
-
    // Process runs part of quantum, but gets terminated.
    else if (probabilityValue >= 97 && probabilityValue <= 100) {
       selection = 3;
