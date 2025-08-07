@@ -22,7 +22,6 @@
 #define MAX_SIZE 1000
 #define QUEUE_COUNT 4
 
-
 /*********************************STRUCTS************************************/
 // For process table operations.
 struct PCB {
@@ -101,7 +100,6 @@ extern long int lastTablePrintNano;
 
 // For feedback queue operations.
 extern int currentChildIndex;
-
 
 /*************************FUNCTION PROTOTYPES********************************/
 //For initialization.
