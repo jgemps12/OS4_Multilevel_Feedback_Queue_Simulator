@@ -17,7 +17,6 @@
 #include <signal.h>
 #include <time.h>
 
-
 // Starting a memory segment for system clock seconds.
 #define SHMKEY1 42069
 #define INT_BUFFER_SIZE sizeof(int)
@@ -77,7 +76,7 @@ int main(int argc, char** argv) {
    int opt;
    strcpy(logfileFP, logfile);
 
-   // Hardcoded values (that used to be user options).
+   // Hardcoded values (that used to be user argument options).
    int proc = 10;
    int simul = 10;
 
@@ -104,7 +103,6 @@ int main(int argc, char** argv) {
       switch (opt) {
          case 'h':
             printHelpMessage();
-
 	    break;
 
 	 case 'f':
@@ -209,7 +207,6 @@ int main(int argc, char** argv) {
            // System time in shared memory constantly updates in loop.
            *secondsShared = systemClockSeconds;
            *nanosecondsShared = systemClockNano;
-
 	   currentLaunchTimeNano = nextLaunchTimeNano;
 
            if (realMicroseconds < 0) {
@@ -242,7 +239,6 @@ int main(int argc, char** argv) {
             *secondsShared = systemClockSeconds;
             *nanosecondsShared = systemClockNano;
 
-
 	    // Run child processes.
 	    execl("./user", "user", NULL);
 
@@ -253,10 +249,7 @@ int main(int argc, char** argv) {
          // Work with parent process. Send a message to a running child process.
 	 if (processID > 0 && realSeconds < 10) {
             if (plannedTerminations == totalChildrenLaunched) {
-               long long int difference = 0;
                idleEndTime = systemNanoOnly;
-	       difference = calculateIdleTime(idleStartTime, idleEndTime);
-
                totalIdleTime += calculateIdleTime(idleStartTime, idleEndTime);
 	    }
 	    
@@ -313,7 +306,6 @@ int main(int argc, char** argv) {
 	          totalIdleTime += hundredMS;
 	       }
 	       break;
-	       
 	    }
 	 }
 	 
@@ -323,7 +315,6 @@ int main(int argc, char** argv) {
 	 if (systemNanoOnly - lastPrintoutTime >= halfBillionNanoseconds) {	    
             printAllFeedbackQueues(queue);
 	    printProcessTable();
-
             lastTablePrintSeconds = systemClockSeconds;
             lastTablePrintNano = systemClockNano;
          }   
@@ -366,7 +357,6 @@ int main(int argc, char** argv) {
                fprintf(logOutputFP, "OSS: Total time spent in dispatch was %d nanoseconds\n", dispatchTime);
                fflush(logOutputFP);
   
-
 	       // Slow down program to prevent race conditions between times in Process Table and those analyzed in user.c.
 	       // Also prevents multiple empty Process Tables from printing towards the program's end.
 	       int i; 
@@ -412,7 +402,6 @@ int main(int argc, char** argv) {
                   addWaitTimeToProcessTable(unblockTime, nextChild);
 
 		  blockedStateTime += calculateBlockedStateTime(systemNanoOnly, nextChild);
-                  sleep(3);
 
 		  // Find child to schedule next.
 	          processDispatchedNext = peekQueue(&queue[queueLevel]);
@@ -439,7 +428,6 @@ int main(int argc, char** argv) {
                   printf("---OSS: User #%d PID %ld is planning to terminate.---\n\n", nextChild, sendBuffer.messageType);
                   fprintf(logOutputFP, "---OSS: User #%d PID %ld is planning to terminate.---\n\n", nextChild, sendBuffer.messageType);
 
-
 		  // Delete process from whatever queue it was in before terminating.
   	          if (isQueueEmpty(&queue[queueLevel]) == false) {
 	             printAllFeedbackQueues(queue);
@@ -458,10 +446,8 @@ int main(int argc, char** argv) {
                   // If there are no running processes, break loop so that program can eventually generate more.
 	          if (processDispatchedNext < 0) {
 		     unblockedProcessesExist = false;
-
 	             break;
 	          }
-	   
                   continue;
                }
          
@@ -469,19 +455,19 @@ int main(int argc, char** argv) {
 	       if (isQueueEmpty(&queue[queueLevel]) == false) {
 	          dequeue(&queue[queueLevel]);  
 	       }
-	       
+		    
 	       // Move process to a lower priority queue.   
                if (queueLevel < LOW_PRIORITY) {
 	          enqueue(&queue[++queueLevel], processDispatchedNext);
                   printAllFeedbackQueues(queue);
                }
-
+		       
 	       // After process runs in low priority queue, place in the back of it.
 	       else if (queueLevel == LOW_PRIORITY) {
 		  slowDownProgram();
                   enqueue(&queue[queueLevel], processDispatchedNext);	 
                }
-
+		    
 	       // Add accumulating schedule time info to the process table.
 	       childWithServiceTime = findIndexInProcessTable(sendBuffer.messageType);
 	       addServiceTimeToProcessTable(childWithServiceTime);
