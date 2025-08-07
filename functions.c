@@ -81,13 +81,11 @@ pid_t dequeue(MultiLevelQueue *queue) {
    slowDownProgram();
 
    pid_t processID = queue->processEntries[queue->front];
-
    queue->front++;
 
    if (queue->front > queue->rear) {
       initializeFeedbackQueue(queue);
    }
-
 
    return processID;
 }
@@ -152,7 +150,6 @@ long long int incrementClock(int *seconds, long long int *nanoseconds, int incre
    return increment;
 }
 
-
 // TOTAL nanoseconds used to determine when to launch the next process.
 long long int convertSystemTimeToNanosecondsOnly(int *seconds, long long int *nanoseconds) {
    long long int nanosecondsWithoutSecs = *nanoseconds;
@@ -164,14 +161,12 @@ long long int convertSystemTimeToNanosecondsOnly(int *seconds, long long int *na
    return nanosecondsWithoutSecs;
 }
 
-
 // Only deals with system nanoseconds to determine next launch time.
 long long int determineNextLaunchNanoseconds (long long int maxTimeBetweenProcesses, long long int currentNanoTime) {
    long long int waitTime = (rand() % (maxTimeBetweenProcesses + 1));
 
    return waitTime + currentNanoTime;
 }
-
 
 // Generates a random dispatch time between 1000 and 10000 nanoseconds (for overhead).
 int determineDispatchTime () {
@@ -181,7 +176,6 @@ int determineDispatchTime () {
 
    return timeSpentInDispatch;
 }
-
 
 // Generates a value between 1 and 5 seconds.
 long long int determineEventWaitTime(int secondsWaitTimeMax, int millisecondsWaitTimeMax, long long int systemClockTime) {
@@ -203,22 +197,22 @@ long long int determineEventWaitTime(int secondsWaitTimeMax, int millisecondsWai
 int determineTimeQuantum(int queueLevel) {
    long int timeQuantum;
 
-   // HIGH PRIORITY
-   if (queueLevel == 0) {
+   if (queueLevel == HIGH_PRIORITY) {
       timeQuantum = 10 * oneMillionNanoseconds;
    }
-   // MEDIUM PRIORITY
-   else if (queueLevel == 1) {
+
+   else if (queueLevel == MED_PRIORITY) {
       timeQuantum = 20 * oneMillionNanoseconds;
    }
-   // LOW PRIORITY
-   else if (queueLevel == 2) {
+
+   else if (queueLevel == LOW_PRIORITY) {
       timeQuantum = 40 * oneMillionNanoseconds;
    }
 
    return timeQuantum;
 }
 
+// Increments system clock by 100 ms if EVERY process in the system is blocked.
 void incrementIfAllChildrenAreBlocked() {
    int i;
    int emptyRows = 0;
@@ -232,7 +226,6 @@ void incrementIfAllChildrenAreBlocked() {
    }
    
    if (emptyRows < 20) {   
-      printf("ALL CHILDREN ARE BLOCKED!!\n\n");
       systemClockIncrement = incrementClock(&systemClockSeconds, &systemClockNano, hundredMS);
       *secondsShared = systemClockSeconds;
       *nanosecondsShared = systemClockNano;
@@ -263,7 +256,6 @@ int addToProcessTable(pid_t pid) {
 	 processTable[i].eventWaitNanoseconds = 0;
 	 processTable[i].blocked = 0;
 
-
 	 if (systemClockNano == oneBillionNanoseconds) {
             processTable[i].startSeconds++;
             processTable[i].startNanoseconds = 0;
@@ -287,6 +279,7 @@ int findIndexInProcessTable(pid_t pid) {
    return -1;
 }
 
+// Adds the amount of time for which a process was scheduled.
 void addServiceTimeToProcessTable(int i) {
    processTable[i].serviceTimeNanoseconds += receiveBuffer.quantumData;
 
@@ -296,7 +289,7 @@ void addServiceTimeToProcessTable(int i) {
    }
 }
 
-
+// Adds the timestamp that a process will become unblocked.
 void addWaitTimeToProcessTable(long long int waitTime, int i) {
    processTable[i].eventWaitNanoseconds = waitTime;
 
@@ -306,6 +299,7 @@ void addWaitTimeToProcessTable(long long int waitTime, int i) {
    }
 }
 
+// Compares all process event wait times to system clock to determine whether a process should be unblocked.
 int possiblyUnblockChild(MultiLevelQueue *queue) {
    long long int eventWaitNanoOnly;
    long int dequeuedChild;
@@ -326,21 +320,14 @@ int possiblyUnblockChild(MultiLevelQueue *queue) {
 	    dequeuedChild = dequeue(&queue[3]);
 
 	    if (dequeuedChild == processTable[i].processID && processTable[i].occupied == 1) {
-               printf("Return child #%d...\n", i);
                enqueue(&queue[0], processTable[i].processID);
-
 
      	       return i;
 	    }
 	    enqueue(&queue[3], dequeuedChild);
          }
       }   
-      
    }
-   printAllFeedbackQueues(queue);
-
-   printf("Return -1\n");
-
    return -1;
 }
 
@@ -370,8 +357,6 @@ void printProcessTable() {
    printf("Entry\t Occupied\t PID\t\t StartS\t StartN\t\t ServiceS\t ServiceN\t EventWaitS\t EventWaitN\t Blocked\n");
 
    int i;
-
-
    for (i = 0; i < 20; i++) {
       // Prints first 3 columns (Entry, Occupied, PID).
       printf("%d\t %d\t\t %d\t", i, processTable[i].occupied, processTable[i].processID);
@@ -413,8 +398,6 @@ void printProcessTableToLogfile() {
    fprintf(logOutputFP, "Entry\t Occupied\t PID\t\t StartS\t StartN\t\t ServiceS\t ServiceN\t EventWaitS\t EventWaitN\t Blocked\n");
 
    int i;
-
-
    for (i = 0; i < 20; i++) {
       // Prints first 3 columns (Entry, Occupied, PID).
       fprintf(logOutputFP, "%d\t %d\t\t %d\t", i, processTable[i].occupied, processTable[i].processID);
@@ -457,7 +440,6 @@ void sendMessageToUSER() {
    }
 }
 
-
 void receiveMessageFromUSER(int i) {
    if (msgrcv(messageQueueID, &receiveBuffer, sizeof(messageBuffer), processTable[i].processID, 0) == -1) {
       printf("ERROR in oss.c: Problem with msgrcv() function.\n");
@@ -474,7 +456,6 @@ void printHelpMessage() {
    printf("\t1.) A Process Control Block (PCB) table with child process entry information.\n");
    printf("\t2.) Messages on the console and a logfile related to process scheduling.\n\n");
 
-
    printf("\n\nTo execute this program, type './oss', then type in any combination of options:\n\n\n");
    printf("Option:                       What to enter after option:               Default values (if argu-      Description:\n");
    printf("                                                                         ment is not entered):\n\n");
@@ -486,6 +467,52 @@ void printHelpMessage() {
    printf("\t1.) while storing message statuses inside a file called 'storage.txt'.\n\n\n");
 
    exit(0);
+}
+
+/**************************************************PROGRAM STATISTICS**************************************************/
+// The amount of time that processes were not actively running or blocked, but were still in the system.
+long long int calculateReadyStateTime(long long int endTime, int i) {
+   long long int startTime = (oneBillionNanoseconds * processTable[i].startSeconds) + processTable[i].startNanoseconds;
+   long long int serviceTime = (oneBillionNanoseconds * processTable[i].serviceTimeSeconds) + processTable[i].serviceTimeNanoseconds;
+
+   return endTime - startTime - serviceTime;
+}
+
+double getAverageReadyStateTime(long long int readyTimeNanoseconds, int processCount) {
+   double readyStateTime = (double) readyTimeNanoseconds / (double) oneBillionNanoseconds;
+
+   return readyStateTime / processCount;
+}
+
+// The amount of time that processes were blocked.
+long long int calculateBlockedStateTime(long long int startTime, int i) {
+   long long int endTime = (oneBillionNanoseconds * processTable[i].eventWaitSeconds) + processTable[i].eventWaitNanoseconds;
+
+   printf("startTime: %lld\t endTime: %lld\n", startTime, endTime);
+
+   return endTime - startTime;
+}
+
+double getAverageBlockedStateTime(long long int blockedTimeNanoseconds, int processCount) {
+   double blockedStateTime = (double) blockedTimeNanoseconds / (double) oneBillionNanoseconds;
+
+   return blockedStateTime / processCount;
+}
+
+// The amount of time when no processes were in the system, or when all processes were blocked.
+long long int calculateIdleTime(long long int startTime, long long int endTime) {
+   return endTime - startTime;
+}
+
+double getTotalIdleTime(long long int idleTimeNanoseconds) {
+   return (double) idleTimeNanoseconds / (double) oneBillionNanoseconds;
+}
+
+// The percent time that the system spent running processes.
+double getUtilizationOfCPU(long long int idleTimeNanoseconds) {
+   double utilization = (((double) systemNanoOnly - (double) idleTimeNanoseconds) / (double) systemNanoOnly) * 100;
+
+   return utilization;
 }
 
 /*************************************************PROGRAM TERMINATION**************************************************/
@@ -508,9 +535,21 @@ void removeMessageQueue() {
    }
 }
 
+void printProgramSummary(int processes, long long int readyTime, long long int blockedTime, long long int idleTime) {
+   printf("**********************PROGRAM SUMMARY**********************\n\n");
+   printf("Total processes launched:                          %d\n", processes);
+   printf("Average process wait time ('ready' state):         %.4f s\n", getAverageReadyStateTime(readyTime, processes));
+   printf("Average process wait time ('blocked' state):       %.4f s\n", getAverageBlockedStateTime(blockedTime, processes));
+   printf("Average CPU utilization:                           %.2f%% \n", getUtilizationOfCPU(idleTime));
+   printf("Total CPU idle time:                               %.4f s\n", getTotalIdleTime(idleTime));
+
+   printf("\n\n");
+   printf("***********************************************************\n\n");
+}
+
 // Gracefully terminates program after a function error or use of CTRL + C.
 void periodicallyTerminateProgram(int signal) {
-   printf("Now terminating all child processes...\n\n");
+   printf("Now terminating all child processes...\n");
 
    int i;
    for (i = 0; i < 20; i++) {
@@ -538,6 +577,7 @@ void periodicallyTerminateProgram(int signal) {
 
    // Graceful termination.
    printf("Now exiting program...\n\n");
+
 
    exit(0);
 }
