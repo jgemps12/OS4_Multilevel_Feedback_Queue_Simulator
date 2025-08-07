@@ -22,7 +22,6 @@ void initializeMessageQueue() {
 
       exit(-1);
    }
-
    if ((messageQueueID = msgget(key, PERMISSIONS | IPC_CREAT)) == -1) {
       printf("ERROR in oss.c: problem with msgget() function.\n");
       printf("Cannot acquire a message queue ID for initialization.\n\n");
@@ -45,7 +44,6 @@ bool isQueueEmpty(MultiLevelQueue *queue) {
    if (frontNeverInitialized == true || allElementsDequeued == true) {
       return true;
    }
-
    return false;
 }
 
@@ -53,10 +51,8 @@ bool isQueueEmpty(MultiLevelQueue *queue) {
 void enqueue(MultiLevelQueue *queue, pid_t pid) {
    if (queue->rear >= MAX_SIZE - 1) {
       printf("ERROR in oss.c: enqueue() function failed. Queue overflow occurred.\n");
-
       periodicallyTerminateProgram(-1);
    }
-
    slowDownProgram();
 
    if (isQueueEmpty(queue) == true) {
@@ -66,7 +62,6 @@ void enqueue(MultiLevelQueue *queue, pid_t pid) {
    else {
       queue->rear++;
    }
-
    queue->processEntries[queue->rear] = pid;
 }
 
@@ -74,10 +69,8 @@ void enqueue(MultiLevelQueue *queue, pid_t pid) {
 pid_t dequeue(MultiLevelQueue *queue) {
    if (isQueueEmpty(queue) == true) {
       printf("ERROR in oss.c: dequeue() function failed. Queue underflow occurred.\n");
-
       periodicallyTerminateProgram(-1);
    }
-
    slowDownProgram();
 
    pid_t processID = queue->processEntries[queue->front];
@@ -98,7 +91,6 @@ pid_t peekQueue(MultiLevelQueue *queue) {
 
       return frontValue;
    }
-
    return -1;
 }
 
@@ -185,10 +177,8 @@ long long int determineEventWaitTime(int secondsWaitTimeMax, int millisecondsWai
    if (secondsToWait == secondsWaitTimeMax) {
       millisecondsToWait = 0;
    }
-
    long long int nanoToWait = (secondsToWait * oneBillionNanoseconds) + (millisecondsToWait * 1000000);
    long long int timeToUnblock = nanoToWait + systemClockTime;
-
 
    return timeToUnblock;
 }
@@ -200,11 +190,9 @@ int determineTimeQuantum(int queueLevel) {
    if (queueLevel == HIGH_PRIORITY) {
       timeQuantum = 10 * oneMillionNanoseconds;
    }
-
    else if (queueLevel == MED_PRIORITY) {
       timeQuantum = 20 * oneMillionNanoseconds;
    }
-
    else if (queueLevel == LOW_PRIORITY) {
       timeQuantum = 40 * oneMillionNanoseconds;
    }
@@ -275,7 +263,6 @@ int findIndexInProcessTable(pid_t pid) {
          return i;
       }
    }
-
    return -1;
 }
 
@@ -363,31 +350,29 @@ void printProcessTable() {
       if (processTable[i].processID == 0) {
          printf("\t");
       }
-
+	   
       // Prints columns 4 and 5 (StartS, StartN).
       printf(" %d\t %ld\t", processTable[i].startSeconds, processTable[i].startNanoseconds);
       if (processTable[i].startNanoseconds < 1000000) {
          printf("\t");
       }
-
+	   
       // Prints columns 6 and 7 (ServiceS, ServiceN).
       printf(" %d\t\t %ld\t", processTable[i].serviceTimeSeconds, processTable[i].serviceTimeNanoseconds);
       if (processTable[i].serviceTimeNanoseconds < 1000000) {
          printf("\t");
       }
-
+	   
       // Prints columns 8 and 9 (EventWaitS, EventWaitN).
       printf(" %d\t\t %lld\t", processTable[i].eventWaitSeconds, processTable[i].eventWaitNanoseconds);
       if (processTable[i].eventWaitNanoseconds < 1000000) {
          printf("\t");
       }
-
+	   
       // Prints column 10 (Blocked--the final column).
       printf(" %d\n", processTable[i].blocked);
    }
-
    printf("\n");
-
    printProcessTableToLogfile();
 }
 
@@ -426,7 +411,6 @@ void printProcessTableToLogfile() {
       // Prints column 10 (Blocked--the final column).
       fprintf(logOutputFP, " %d\n", processTable[i].blocked);
    }
-
    fprintf(logOutputFP, "\n");
 }
 
@@ -487,9 +471,7 @@ double getAverageReadyStateTime(long long int readyTimeNanoseconds, int processC
 // The amount of time that processes were blocked.
 long long int calculateBlockedStateTime(long long int startTime, int i) {
    long long int endTime = (oneBillionNanoseconds * processTable[i].eventWaitSeconds) + processTable[i].eventWaitNanoseconds;
-
-   printf("startTime: %lld\t endTime: %lld\n", startTime, endTime);
-
+	
    return endTime - startTime;
 }
 
