@@ -6,218 +6,217 @@
 /************************************************PROGRAM INITIALIZATION************************************************/
 // Create a logfile for process output.
 void initializeLogfile() {
-   logOutputFP = fopen(logfile, "w");
+	logOutputFP = fopen(logfile, "w");
 
-   if (logOutputFP == NULL) {
-      printf("ERROR in oss.c: cannot create a log file named '%s'", logfile);
-
-      exit(-1);
-   }
+	if (logOutputFP == NULL) {
+		printf("ERROR in oss.c: cannot create a log file named '%s'", logfile);
+		exit(-1);
+	}
 }
 
 void initializeMessageQueue() {
-   if ((key = ftok(logfile, 1)) == -1) {
-      printf("ERROR in oss.c: problem with ftok() function.\n");
-      printf("Cannot access a key for message queue initialization.\n\n");
+	if ((key = ftok(logfile, 1)) == -1) {
+		printf("ERROR in oss.c: problem with ftok() function.\n");
+		printf("Cannot access a key for message queue initialization.\n\n");
+		
+		exit(-1);
+	}
+	if ((messageQueueID = msgget(key, PERMISSIONS | IPC_CREAT)) == -1) {
+		printf("ERROR in oss.c: problem with msgget() function.\n");
+		printf("Cannot acquire a message queue ID for initialization.\n\n");
 
-      exit(-1);
-   }
-   if ((messageQueueID = msgget(key, PERMISSIONS | IPC_CREAT)) == -1) {
-      printf("ERROR in oss.c: problem with msgget() function.\n");
-      printf("Cannot acquire a message queue ID for initialization.\n\n");
-
-      exit(-1);
-   }
-   printf("Message queue is now set up.\n\n");
+		exit(-1);
+	}
+	printf("Message queue is now set up.\n\n");
 }
 
 void initializeFeedbackQueue(MultiLevelQueue *queue) {
-   queue->front = -1;
-   queue->rear = -1;
+	queue->front = -1;
+	queue->rear = -1;
 }
 
 /***********************************************FEEDBACK QUEUE OPERATIONS**********************************************/
 bool isQueueEmpty(MultiLevelQueue *queue) {
-   bool frontNeverInitialized = (queue->front == -1);
-   bool allElementsDequeued = (queue->front  >  queue->rear);
+	bool frontNeverInitialized = (queue->front == -1);
+	bool allElementsDequeued = (queue->front  >  queue->rear);
 
-   if (frontNeverInitialized == true || allElementsDequeued == true) {
-      return true;
-   }
-   return false;
+	if (frontNeverInitialized == true || allElementsDequeued == true) {
+		return true;
+	}
+	return false;
 }
 
 // Add process to back of queue.
 void enqueue(MultiLevelQueue *queue, pid_t pid) {
-   if (queue->rear >= MAX_SIZE - 1) {
-      printf("ERROR in oss.c: enqueue() function failed. Queue overflow occurred.\n");
-      periodicallyTerminateProgram(-1);
-   }
-   slowDownProgram();
+	if (queue->rear >= MAX_SIZE - 1) {
+		printf("ERROR in oss.c: enqueue() function failed. Queue overflow occurred.\n");
+		periodicallyTerminateProgram(-1);
+	}
+	slowDownProgram();
 
-   if (isQueueEmpty(queue) == true) {
-      queue->front = 0;
-      queue->rear = 0;
-   }
-   else {
-      queue->rear++;
-   }
-   queue->processEntries[queue->rear] = pid;
+	if (isQueueEmpty(queue) == true) {
+		queue->front = 0;
+		queue->rear = 0;
+	}
+	else {
+		queue->rear++;
+	}
+	queue->processEntries[queue->rear] = pid;
 }
 
 // Remove process from back of queue.
 pid_t dequeue(MultiLevelQueue *queue) {
-   if (isQueueEmpty(queue) == true) {
-      printf("ERROR in oss.c: dequeue() function failed. Queue underflow occurred.\n");
-      periodicallyTerminateProgram(-1);
-   }
-   slowDownProgram();
+	if (isQueueEmpty(queue) == true) {
+		printf("ERROR in oss.c: dequeue() function failed. Queue underflow occurred.\n");
+		periodicallyTerminateProgram(-1);
+	}
+	slowDownProgram();
 
-   pid_t processID = queue->processEntries[queue->front];
-   queue->front++;
+	pid_t processID = queue->processEntries[queue->front];
+	queue->front++;
 
-   if (queue->front > queue->rear) {
-      initializeFeedbackQueue(queue);
-   }
+	if (queue->front > queue->rear) {
+    	initializeFeedbackQueue(queue);
+	}
 
-   return processID;
+	return processID;
 }
 
 // Return value at front of queue WITHOUT removing it.
 pid_t peekQueue(MultiLevelQueue *queue) {
-   if (isQueueEmpty(queue) == false) {
-      int front = queue->front;
-      int frontValue = queue->processEntries[front];
+	if (isQueueEmpty(queue) == false) {
+    	int front = queue->front;
+    	int frontValue = queue->processEntries[front];
 
-      return frontValue;
-   }
-   return -1;
+    	return frontValue;
+	}
+	return -1;
 }
 
 void printAllFeedbackQueues(MultiLevelQueue queue[]) {
-   int i;
-   for (i = 0; i < QUEUE_COUNT; i++) {
-      printf("Queue %d: ", i);
-      fprintf(logOutputFP, "Queue %d: ", i);
+	int i;
+	for (i = 0; i < QUEUE_COUNT; i++) {
+		printf("Queue %d: ", i);
+    	fprintf(logOutputFP, "Queue %d: ", i);
 
-      printOneQueue(&queue[i]);
-   }
-   printf("\n");
-   fprintf(logOutputFP, "\n");
+    	printOneQueue(&queue[i]);
+	}
+	printf("\n");
+	fprintf(logOutputFP, "\n");
 }
 
 void printOneQueue(MultiLevelQueue *queue) {
-   if (isQueueEmpty(queue) == true) {
-      printf("(empty)\n");
-      fprintf(logOutputFP, "(empty)\n");
+	if (isQueueEmpty(queue) == true) {
+		printf("(empty)\n");
+    	fprintf(logOutputFP, "(empty)\n");
 
-      return;
-   }
+		return;
+	}
 
-   int i;
-   for (i = queue->front; i <= queue->rear; i++) {
-      printf("%d ", queue->processEntries[i]);
-      fprintf(logOutputFP, "%d ", queue->processEntries[i]);
-   }
+	int i;
+	for (i = queue->front; i <= queue->rear; i++) {
+		printf("%d ", queue->processEntries[i]);
+		fprintf(logOutputFP, "%d ", queue->processEntries[i]);
+	}
 
-   printf("\n");
-   fprintf(logOutputFP, "\n");
+	printf("\n");
+	fprintf(logOutputFP, "\n");
 }
 
 /***********************************************SYSTEM CLOCK OPERATIONS************************************************/
 // Adjust system time's seconds and nanoseconds.
 long long int incrementClock(int *seconds, long long int *nanoseconds, int increment) {
-   (*nanoseconds) += increment;
+	(*nanoseconds) += increment;
 
-   if (*nanoseconds > oneBillionNanoseconds) {
-       *nanoseconds = 0;
-       (*seconds)++;
-   }
-   else if (*nanoseconds < 0) {
-      *nanoseconds += oneBillionNanoseconds;
-      (*seconds)--;
-   }
+	if (*nanoseconds > oneBillionNanoseconds) {
+		*nanoseconds = 0;
+		(*seconds)++;
+	}
+	else if (*nanoseconds < 0) {
+		*nanoseconds += oneBillionNanoseconds;
+		(*seconds)--;
+	}
 
-   systemNanoOnly = convertSystemTimeToNanosecondsOnly(seconds, nanoseconds);
-   return increment;
+	systemNanoOnly = convertSystemTimeToNanosecondsOnly(seconds, nanoseconds);
+	return increment;
 }
 
 // TOTAL nanoseconds used to determine when to launch the next process.
 long long int convertSystemTimeToNanosecondsOnly(int *seconds, long long int *nanoseconds) {
-   long long int nanosecondsWithoutSecs = *nanoseconds;
-   int i;
-   for (i = 1; i <= (*seconds); i++) {
-      nanosecondsWithoutSecs += oneBillionNanoseconds;
-   }
+	long long int nanosecondsWithoutSecs = *nanoseconds;
+	int i;
+	for (i = 1; i <= (*seconds); i++) {
+		nanosecondsWithoutSecs += oneBillionNanoseconds;
+	}
 
-   return nanosecondsWithoutSecs;
+	return nanosecondsWithoutSecs;
 }
 
 // Only deals with system nanoseconds to determine next launch time.
 long long int determineNextLaunchNanoseconds (long long int maxTimeBetweenProcesses, long long int currentNanoTime) {
-   long long int waitTime = (rand() % (maxTimeBetweenProcesses + 1));
+	long long int waitTime = (rand() % (maxTimeBetweenProcesses + 1));
 
-   return waitTime + currentNanoTime;
+	return waitTime + currentNanoTime;
 }
 
 // Generates a random dispatch time between 1000 and 10000 nanoseconds (for overhead).
 int determineDispatchTime () {
-   int maxNanoseconds = 10000;
-   int minNanoseconds = 1000;
-   int timeSpentInDispatch = rand() % (maxNanoseconds - minNanoseconds + 1) + 1000;
+	int maxNanoseconds = 10000;
+	int minNanoseconds = 1000;
+	int timeSpentInDispatch = rand() % (maxNanoseconds - minNanoseconds + 1) + 1000;
 
-   return timeSpentInDispatch;
+	return timeSpentInDispatch;
 }
 
 // Generates a value between 1 and 5 seconds.
 long long int determineEventWaitTime(int secondsWaitTimeMax, int millisecondsWaitTimeMax, long long int systemClockTime) {
-   int secondsToWait = rand() % secondsWaitTimeMax;
-   int millisecondsToWait = rand() % millisecondsWaitTimeMax;
+	int secondsToWait = rand() % secondsWaitTimeMax;
+	int millisecondsToWait = rand() % millisecondsWaitTimeMax;
 
-   if (secondsToWait == secondsWaitTimeMax) {
-      millisecondsToWait = 0;
-   }
-   long long int nanoToWait = (secondsToWait * oneBillionNanoseconds) + (millisecondsToWait * 1000000);
-   long long int timeToUnblock = nanoToWait + systemClockTime;
+	if (secondsToWait == secondsWaitTimeMax) {
+		millisecondsToWait = 0;
+	}
+	long long int nanoToWait = (secondsToWait * oneBillionNanoseconds) + (millisecondsToWait * 1000000);
+	long long int timeToUnblock = nanoToWait + systemClockTime;
 
-   return timeToUnblock;
+	return timeToUnblock;
 }
 
 // Return the correct time quantum based on queue level.
 int determineTimeQuantum(int queueLevel) {
-   long int timeQuantum;
+	long int timeQuantum;
 
-   if (queueLevel == HIGH_PRIORITY) {
-      timeQuantum = 10 * oneMillionNanoseconds;
-   }
-   else if (queueLevel == MED_PRIORITY) {
-      timeQuantum = 20 * oneMillionNanoseconds;
-   }
-   else if (queueLevel == LOW_PRIORITY) {
-      timeQuantum = 40 * oneMillionNanoseconds;
-   }
+	if (queueLevel == HIGH_PRIORITY) {
+		timeQuantum = 10 * oneMillionNanoseconds;
+	}
+	else if (queueLevel == MED_PRIORITY) {
+		timeQuantum = 20 * oneMillionNanoseconds;
+	}
+	else if (queueLevel == LOW_PRIORITY) {
+		timeQuantum = 40 * oneMillionNanoseconds;
+	}
 
-   return timeQuantum;
+	return timeQuantum;
 }
 
 // Increments system clock by 100 ms if EVERY process in the system is blocked.
 void incrementIfAllChildrenAreBlocked() {
-   int i;
-   int emptyRows = 0;
-   for (i = 0; i < 20; i++) {
-      if (processTable[i].occupied == 1 && processTable[i].blocked == 0) {
-         return;
-      }
-      if (processTable[i].occupied == 0) {
-         emptyRows++;
-      }
-   }
+	int i;
+	int emptyRows = 0;
+	for (i = 0; i < 20; i++) {
+		if (processTable[i].occupied == 1 && processTable[i].blocked == 0) {
+			return;
+		}
+		if (processTable[i].occupied == 0) {
+			emptyRows++;
+		}
+	}
    
-   if (emptyRows < 20) {   
-      systemClockIncrement = incrementClock(&systemClockSeconds, &systemClockNano, hundredMS);
-      *secondsShared = systemClockSeconds;
-      *nanosecondsShared = systemClockNano;
-   }
+	if (emptyRows < 20) {   
+		systemClockIncrement = incrementClock(&systemClockSeconds, &systemClockNano, hundredMS);
+		*secondsShared = systemClockSeconds;
+		*nanosecondsShared = systemClockNano;
+	}
 }
 
 // Attempts to prevent race conditions from occurring during message transfers,
@@ -231,335 +230,334 @@ void slowDownProgram() {
 /**********************************************PROCESS TABLE OPERATIONS************************************************/
 // These three functions below manage and delete entries in the PCB table.
 int addToProcessTable(pid_t pid) {
-   int i;
-   for (i = 0; i < 20; i++) {
-      if (processTable[i].occupied == 0) {
-         processTable[i].occupied = 1;
-         processTable[i].processID = pid;
-         processTable[i].startSeconds = systemClockSeconds;
-         processTable[i].startNanoseconds = systemClockNano;
-	 processTable[i].serviceTimeSeconds = 0;
-	 processTable[i].serviceTimeNanoseconds = 0;
-	 processTable[i].eventWaitSeconds = 0;
-	 processTable[i].eventWaitNanoseconds = 0;
-	 processTable[i].blocked = 0;
+	int i;
+	for (i = 0; i < 20; i++) {
+    	if (processTable[i].occupied == 0) {
+			processTable[i].occupied = 1;
+			processTable[i].processID = pid;
+			processTable[i].startSeconds = systemClockSeconds;
+			processTable[i].startNanoseconds = systemClockNano;
+			processTable[i].serviceTimeSeconds = 0;
+			processTable[i].serviceTimeNanoseconds = 0;
+			processTable[i].eventWaitSeconds = 0;
+			processTable[i].eventWaitNanoseconds = 0;
+			processTable[i].blocked = 0;
 
-	 if (systemClockNano == oneBillionNanoseconds) {
-            processTable[i].startSeconds++;
-            processTable[i].startNanoseconds = 0;
-         }
+			if (systemClockNano == oneBillionNanoseconds) {
+				processTable[i].startSeconds++;
+				processTable[i].startNanoseconds = 0;
+			}
 
-         return i;
-      }
-   }
-   // If table is full, return this value to print an error in main() function.
-   return -1;
+			return i;
+		}
+	}
+	// If table is full, return this value to print an error in main() function.
+	return -1;
 }
 
 int findIndexInProcessTable(pid_t pid) {
-   int i;
-   for (i = 0; i < 20; i++) {
-      if (processTable[i].processID == pid) {
-         return i;
-      }
-   }
-   return -1;
+	int i;
+	for (i = 0; i < 20; i++) {
+		if (processTable[i].processID == pid) {
+			return i;
+		}
+	}
+	return -1;
 }
 
 // Adds the amount of time for which a process was scheduled.
 void addServiceTimeToProcessTable(int i) {
-   processTable[i].serviceTimeNanoseconds += receiveBuffer.quantumData;
+	processTable[i].serviceTimeNanoseconds += receiveBuffer.quantumData;
 
-   if (processTable[i].serviceTimeNanoseconds >= oneBillionNanoseconds) {
-      processTable[i].serviceTimeSeconds++;
-      processTable[i].serviceTimeNanoseconds -= oneBillionNanoseconds;
-   }
+	if (processTable[i].serviceTimeNanoseconds >= oneBillionNanoseconds) {
+		processTable[i].serviceTimeSeconds++;
+		processTable[i].serviceTimeNanoseconds -= oneBillionNanoseconds;
+	}
 }
 
 // Adds the timestamp that a process will become unblocked.
 void addWaitTimeToProcessTable(long long int waitTime, int i) {
-   processTable[i].eventWaitNanoseconds = waitTime;
+	processTable[i].eventWaitNanoseconds = waitTime;
 
-   while (processTable[i].eventWaitNanoseconds >= oneBillionNanoseconds) {
-      processTable[i].eventWaitSeconds++;
-      processTable[i].eventWaitNanoseconds -= oneBillionNanoseconds;
-   }
+	while (processTable[i].eventWaitNanoseconds >= oneBillionNanoseconds) {
+		processTable[i].eventWaitSeconds++;
+		processTable[i].eventWaitNanoseconds -= oneBillionNanoseconds;	
+	}
 }
 
 // Compares all process event wait times to system clock to determine whether a process should be unblocked.
 int possiblyUnblockChild(MultiLevelQueue *queue) {
-   long long int eventWaitNanoOnly;
-   long int dequeuedChild;
-   int i;
+	long long int eventWaitNanoOnly;
+	long int dequeuedChild;
+	int i;
 
-   incrementIfAllChildrenAreBlocked();
+	incrementIfAllChildrenAreBlocked();
 
-   for (i = 0; i < 20; i++) {
-      eventWaitNanoOnly = (processTable[i].eventWaitSeconds * oneBillionNanoseconds) + processTable[i].eventWaitNanoseconds;
+	for (i = 0; i < 20; i++) {
+		eventWaitNanoOnly = (processTable[i].eventWaitSeconds * oneBillionNanoseconds) + processTable[i].eventWaitNanoseconds;
 
-      if (systemNanoOnly >= eventWaitNanoOnly && eventWaitNanoOnly != 0) {
-	 processTable[i].eventWaitSeconds = 0;
-	 processTable[i].eventWaitNanoseconds = 0;
-         processTable[i].blocked = 0;
+		if (systemNanoOnly >= eventWaitNanoOnly && eventWaitNanoOnly != 0) {
+			processTable[i].eventWaitSeconds = 0;
+			processTable[i].eventWaitNanoseconds = 0;
+			processTable[i].blocked = 0;
 
-	 // Keep dequeuing from blocked queue until for-loop finds a match.
-         while (dequeuedChild != processTable[i].processID) {
-	    dequeuedChild = dequeue(&queue[3]);
+			// Keep dequeuing from blocked queue until for-loop finds a match.
+			while (dequeuedChild != processTable[i].processID) {
+				dequeuedChild = dequeue(&queue[3]);
 
-	    if (dequeuedChild == processTable[i].processID && processTable[i].occupied == 1) {
-               enqueue(&queue[0], processTable[i].processID);
-
-     	       return i;
-	    }
-	    enqueue(&queue[3], dequeuedChild);
-         }
-      }   
-   }
-   return -1;
+				if (dequeuedChild == processTable[i].processID && processTable[i].occupied == 1) {
+					enqueue(&queue[0], processTable[i].processID);
+					
+					return i;
+				}
+				enqueue(&queue[3], dequeuedChild);
+			}
+		}   
+	}
+	return -1;
 }
 
 void removeFromProcessTable(pid_t pid) {
-   int i;
-   for (i = 0; i < 20; i++) {
-      if (processTable[i].processID == pid) {
-         processTable[i].occupied = 0;
-         processTable[i].processID = 0;
-         processTable[i].startSeconds = 0;
-         processTable[i].startNanoseconds = 0;
-         processTable[i].serviceTimeSeconds = 0;
-         processTable[i].serviceTimeNanoseconds = 0;
-         processTable[i].eventWaitSeconds = 0;
-         processTable[i].eventWaitNanoseconds = 0;
-         processTable[i].blocked = 0;
+	int i;
+	for (i = 0; i < 20; i++) {
+		if (processTable[i].processID == pid) {
+			processTable[i].occupied = 0;
+			processTable[i].processID = 0;
+			processTable[i].startSeconds = 0;
+			processTable[i].startNanoseconds = 0;
+			processTable[i].serviceTimeSeconds = 0;
+			processTable[i].serviceTimeNanoseconds = 0;
+			processTable[i].eventWaitSeconds = 0;
+			processTable[i].eventWaitNanoseconds = 0;
+			processTable[i].blocked = 0;
 
-         break;
-      }
-   }
+			break;
+		}
+	}
 }
 
 // Output goes to console.
 void printProcessTable() {
-   printf("\nOSS PID: %d  SysClockS: %d  SysClockNano: %lld\n", getpid(), systemClockSeconds, systemClockNano);
-   printf("Process Table:\n");
-   printf("Entry\t Occupied\t PID\t\t StartS\t StartN\t\t ServiceS\t ServiceN\t EventWaitS\t EventWaitN\t Blocked\n");
-
-   int i;
-   for (i = 0; i < 20; i++) {
-      // Prints first 3 columns (Entry, Occupied, PID).
-      printf("%d\t %d\t\t %d\t", i, processTable[i].occupied, processTable[i].processID);
-      if (processTable[i].processID == 0) {
-         printf("\t");
-      }
-	   
-      // Prints columns 4 and 5 (StartS, StartN).
-      printf(" %d\t %ld\t", processTable[i].startSeconds, processTable[i].startNanoseconds);
-      if (processTable[i].startNanoseconds < 1000000) {
-         printf("\t");
-      }
-	   
-      // Prints columns 6 and 7 (ServiceS, ServiceN).
-      printf(" %d\t\t %ld\t", processTable[i].serviceTimeSeconds, processTable[i].serviceTimeNanoseconds);
-      if (processTable[i].serviceTimeNanoseconds < 1000000) {
-         printf("\t");
-      }
-	   
-      // Prints columns 8 and 9 (EventWaitS, EventWaitN).
-      printf(" %d\t\t %lld\t", processTable[i].eventWaitSeconds, processTable[i].eventWaitNanoseconds);
-      if (processTable[i].eventWaitNanoseconds < 1000000) {
-         printf("\t");
-      }
-	   
-      // Prints column 10 (Blocked--the final column).
-      printf(" %d\n", processTable[i].blocked);
-   }
-   printf("\n");
-   printProcessTableToLogfile();
+	printf("\nOSS PID: %d  SysClockS: %d  SysClockNano: %lld\n", getpid(), systemClockSeconds, systemClockNano);
+	printf("Process Table:\n");
+	printf("Entry\t Occupied\t PID\t\t StartS\t StartN\t\t ServiceS\t ServiceN\t EventWaitS\t EventWaitN\t Blocked\n");
+	
+	int i;
+	for (i = 0; i < 20; i++) {
+		// Prints first 3 columns (Entry, Occupied, PID).
+		printf("%d\t %d\t\t %d\t", i, processTable[i].occupied, processTable[i].processID);
+		if (processTable[i].processID == 0) {
+			printf("\t");
+		}
+		
+		// Prints columns 4 and 5 (StartS, StartN).
+		printf(" %d\t %ld\t", processTable[i].startSeconds, processTable[i].startNanoseconds);
+		if (processTable[i].startNanoseconds < 1000000) {
+			printf("\t");
+		}
+		
+		// Prints columns 6 and 7 (ServiceS, ServiceN).
+		printf(" %d\t\t %ld\t", processTable[i].serviceTimeSeconds, processTable[i].serviceTimeNanoseconds);
+		if (processTable[i].serviceTimeNanoseconds < 1000000) {
+			printf("\t");
+		}
+		
+		// Prints columns 8 and 9 (EventWaitS, EventWaitN).
+		printf(" %d\t\t %lld\t", processTable[i].eventWaitSeconds, processTable[i].eventWaitNanoseconds);
+		if (processTable[i].eventWaitNanoseconds < 1000000) {
+			printf("\t");
+		}
+		
+		// Prints column 10 (Blocked--the final column).
+		printf(" %d\n", processTable[i].blocked);
+	}
+	printf("\n");
+	printProcessTableToLogfile();
 }
 
 void printProcessTableToLogfile() {
-   fprintf(logOutputFP, "OSS: Outputting process table:\n");
-   fprintf(logOutputFP, "\nOSS PID: %d  SysClockS: %d  SysClockNano: %lld\n", getpid(), systemClockSeconds, systemClockNano);
-   fprintf(logOutputFP, "Process Table:\n");
-   fprintf(logOutputFP, "Entry\t Occupied\t PID\t\t StartS\t StartN\t\t ServiceS\t ServiceN\t EventWaitS\t EventWaitN\t Blocked\n");
+	fprintf(logOutputFP, "OSS: Outputting process table:\n");
+	fprintf(logOutputFP, "\nOSS PID: %d  SysClockS: %d  SysClockNano: %lld\n", getpid(), systemClockSeconds, systemClockNano);
+	fprintf(logOutputFP, "Process Table:\n");
+	fprintf(logOutputFP, "Entry\t Occupied\t PID\t\t StartS\t StartN\t\t ServiceS\t ServiceN\t EventWaitS\t EventWaitN\t Blocked\n");
 
-   int i;
-   for (i = 0; i < 20; i++) {
-      // Prints first 3 columns (Entry, Occupied, PID).
-      fprintf(logOutputFP, "%d\t %d\t\t %d\t", i, processTable[i].occupied, processTable[i].processID);
-      if (processTable[i].processID == 0) {
-         fprintf(logOutputFP, "\t");
-      }
-
-      // Prints columns 4 and 5 (StartS, StartN).
-      fprintf(logOutputFP, " %d\t %ld\t", processTable[i].startSeconds, processTable[i].startNanoseconds);
-      if (processTable[i].startNanoseconds < 1000000) {
-         fprintf(logOutputFP, "\t");
-      }
-
-      // Prints columns 6 and 7 (ServiceS, ServiceN).
-      fprintf(logOutputFP, " %d\t\t %ld\t", processTable[i].serviceTimeSeconds, processTable[i].serviceTimeNanoseconds);
-      if (processTable[i].serviceTimeNanoseconds < 1000000) {
-         fprintf(logOutputFP, "\t");
-      }
-
-      // Prints columns 8 and 9 (EventWaitS, EventWaitN).
-      fprintf(logOutputFP, " %d\t\t %lld\t", processTable[i].eventWaitSeconds, processTable[i].eventWaitNanoseconds);
-      if (processTable[i].eventWaitNanoseconds < 1000000) {
-         fprintf(logOutputFP, "\t");
-      }
-
-      // Prints column 10 (Blocked--the final column).
-      fprintf(logOutputFP, " %d\n", processTable[i].blocked);
-   }
-   fprintf(logOutputFP, "\n");
+	int i;
+	for (i = 0; i < 20; i++) {
+		// Prints first 3 columns (Entry, Occupied, PID).
+		fprintf(logOutputFP, "%d\t %d\t\t %d\t", i, processTable[i].occupied, processTable[i].processID);
+		if (processTable[i].processID == 0) {
+			fprintf(logOutputFP, "\t");
+		}
+		
+		// Prints columns 4 and 5 (StartS, StartN).
+		fprintf(logOutputFP, " %d\t %ld\t", processTable[i].startSeconds, processTable[i].startNanoseconds);
+		if (processTable[i].startNanoseconds < 1000000) {
+ 			fprintf(logOutputFP, "\t");
+		}
+		
+		// Prints columns 6 and 7 (ServiceS, ServiceN).
+		fprintf(logOutputFP, " %d\t\t %ld\t", processTable[i].serviceTimeSeconds, processTable[i].serviceTimeNanoseconds);
+		if (processTable[i].serviceTimeNanoseconds < 1000000) {
+			fprintf(logOutputFP, "\t");
+		}
+		
+		// Prints columns 8 and 9 (EventWaitS, EventWaitN).
+		fprintf(logOutputFP, " %d\t\t %lld\t", processTable[i].eventWaitSeconds, processTable[i].eventWaitNanoseconds);
+		if (processTable[i].eventWaitNanoseconds < 1000000) {
+			fprintf(logOutputFP, "\t");
+		}
+		
+		// Prints column 10 (Blocked--the final column).
+		fprintf(logOutputFP, " %d\n", processTable[i].blocked);
+	}
+	fprintf(logOutputFP, "\n");
 }
 
 /********************************************MESSAGE PASSING OPERATIONS************************************************/
 void sendMessageToUSER() {
-   if (msgsnd(messageQueueID, &sendBuffer, sizeof(messageBuffer) - sizeof(long int), 0) == -1) {
-      printf("ERROR in oss.c: Problem with msgsnd() function.\n");
-      printf("Cannot send message to user.c.\n\n");
-
-      periodicallyTerminateProgram(-1);
-   }
+	if (msgsnd(messageQueueID, &sendBuffer, sizeof(messageBuffer) - sizeof(long int), 0) == -1) {
+		printf("ERROR in oss.c: Problem with msgsnd() function.\n");
+		printf("Cannot send message to user.c.\n\n");
+		
+		periodicallyTerminateProgram(-1);
+	}
 }
 
 void receiveMessageFromUSER(int i) {
-   if (msgrcv(messageQueueID, &receiveBuffer, sizeof(messageBuffer), processTable[i].processID, 0) == -1) {
-      printf("ERROR in oss.c: Problem with msgrcv() function.\n");
-      printf("Cannot receive message from user.c.\n\n");
-
-      periodicallyTerminateProgram(-1);
-   }
+	if (msgrcv(messageQueueID, &receiveBuffer, sizeof(messageBuffer), processTable[i].processID, 0) == -1) {
+		printf("ERROR in oss.c: Problem with msgrcv() function.\n");
+		printf("Cannot receive message from user.c.\n\n");
+		
+		periodicallyTerminateProgram(-1);
+	}
 }
 
 /***************************************************USER GUIDANCE******************************************************/
 // Displays a help message if user enters './oss -h'.
 void printHelpMessage() {
-   printf("\n\n\nThis program displays information about child and parent processes, including:\n");
-   printf("\t1.) A Process Control Block (PCB) table with child process entry information.\n");
-   printf("\t2.) Messages on the console and a logfile related to process scheduling.\n\n");
-
-   printf("\n\nTo execute this program, type './oss', then type in any combination of options:\n\n\n");
-   printf("Option:                       What to enter after option:               Default values (if argu-      Description:\n");
-   printf("                                                                         ment is not entered):\n\n");
-   printf("  -h                           > nothing.                                 > (not applicable)           > Displays this help menu.\n");
-   printf("  -f [logfile]                 > a file's basename.                       > defaults to 'logfile'      > Stores output relating to parent and\n");
-   printf("                                                                                                          child processes.\n\n\n");
-
-   printf("For example, typing './oss -f 'storage' will run the program:\n");
-   printf("\t1.) while storing message statuses inside a file called 'storage.txt'.\n\n\n");
-
-   exit(0);
+	printf("\n\n\nThis program displays information about child and parent processes, including:\n");
+	printf("\t1.) A Process Control Block (PCB) table with child process entry information.\n");
+	printf("\t2.) Messages on the console and a logfile related to process scheduling.\n\n");
+	
+	printf("\n\nTo execute this program, type './oss', then type in any combination of options:\n\n\n");
+	printf("Option:                       What to enter after option:               Default values (if argu-      Description:\n");
+	printf("                                                                         ment is not entered):\n\n");
+	printf("  -h                           > nothing.                                 > (not applicable)           > Displays this help menu.\n");
+	printf("  -f [logfile]                 > a file's basename.                       > defaults to 'logfile'      > Stores output relating to parent and\n");
+	printf("                                                                                                          child processes.\n\n\n");
+	
+	printf("For example, typing './oss -f 'storage' will run the program:\n");
+	printf("\t1.) while storing message statuses inside a file called 'storage.txt'.\n\n\n");
+	
+	exit(0);
 }
 
 /**************************************************PROGRAM STATISTICS**************************************************/
 // The amount of time that processes were not actively running or blocked, but were still in the system.
 long long int calculateReadyStateTime(long long int endTime, int i) {
-   long long int startTime = (oneBillionNanoseconds * processTable[i].startSeconds) + processTable[i].startNanoseconds;
-   long long int serviceTime = (oneBillionNanoseconds * processTable[i].serviceTimeSeconds) + processTable[i].serviceTimeNanoseconds;
-
-   return endTime - startTime - serviceTime;
+	long long int startTime = (oneBillionNanoseconds * processTable[i].startSeconds) + processTable[i].startNanoseconds;
+	long long int serviceTime = (oneBillionNanoseconds * processTable[i].serviceTimeSeconds) + processTable[i].serviceTimeNanoseconds;
+	
+	return endTime - startTime - serviceTime;
 }
 
 double getAverageReadyStateTime(long long int readyTimeNanoseconds, int processCount) {
-   double readyStateTime = (double) readyTimeNanoseconds / (double) oneBillionNanoseconds;
-
-   return readyStateTime / processCount;
+	double readyStateTime = (double) readyTimeNanoseconds / (double) oneBillionNanoseconds;
+	
+	return readyStateTime / processCount;
 }
 
 // The amount of time that processes were blocked.
 long long int calculateBlockedStateTime(long long int startTime, int i) {
-   long long int endTime = (oneBillionNanoseconds * processTable[i].eventWaitSeconds) + processTable[i].eventWaitNanoseconds;
+	long long int endTime = (oneBillionNanoseconds * processTable[i].eventWaitSeconds) + processTable[i].eventWaitNanoseconds;
 	
-   return endTime - startTime;
+	return endTime - startTime;
 }
 
 double getAverageBlockedStateTime(long long int blockedTimeNanoseconds, int processCount) {
-   double blockedStateTime = (double) blockedTimeNanoseconds / (double) oneBillionNanoseconds;
-
-   return blockedStateTime / processCount;
+	double blockedStateTime = (double) blockedTimeNanoseconds / (double) oneBillionNanoseconds;
+	
+	return blockedStateTime / processCount;
 }
 
 // The amount of time when no processes were in the system, or when all processes were blocked.
 long long int calculateIdleTime(long long int startTime, long long int endTime) {
-   return endTime - startTime;
+	return endTime - startTime;
 }
 
 double getTotalIdleTime(long long int idleTimeNanoseconds) {
-   return (double) idleTimeNanoseconds / (double) oneBillionNanoseconds;
+	return (double) idleTimeNanoseconds / (double) oneBillionNanoseconds;
 }
 
 // The percent time that the system spent running processes.
 double getUtilizationOfCPU(long long int idleTimeNanoseconds) {
-   double utilization = (((double) systemNanoOnly - (double) idleTimeNanoseconds) / (double) systemNanoOnly) * 100;
-
-   return utilization;
+	double utilization = (((double) systemNanoOnly - (double) idleTimeNanoseconds) / (double) systemNanoOnly) * 100;
+	
+	return utilization;
 }
 
 /*************************************************PROGRAM TERMINATION**************************************************/
 // Clean memory segments and message queue.
 void detachAndClearSharedMemory () {
-   shmdt(secondsShared);
-   shmdt(nanosecondsShared);
-   shmdt(logfileFP);
-   shmctl(secondsShmid, IPC_RMID, NULL);
-   shmctl(nanoShmid, IPC_RMID, NULL);
-   shmctl(logfileShmid, IPC_RMID, NULL);
+	shmdt(secondsShared);
+	shmdt(nanosecondsShared);
+	shmdt(logfileFP);
+	shmctl(secondsShmid, IPC_RMID, NULL);
+	shmctl(nanoShmid, IPC_RMID, NULL);
+	shmctl(logfileShmid, IPC_RMID, NULL);
 }
 
 void removeMessageQueue() {
-   if (msgctl(messageQueueID, IPC_RMID, NULL) == -1) {
-      printf("ERROR in oss.c: problem with msgctl() function.\n");
-      printf("Cannot delete or remove message queue.\n\n");
-
-      exit(-1);
-   }
+	if (msgctl(messageQueueID, IPC_RMID, NULL) == -1) {
+		printf("ERROR in oss.c: problem with msgctl() function.\n");
+		printf("Cannot delete or remove message queue.\n\n");
+		
+		exit(-1);
+	}
 }
 
 void printProgramSummary(int processes, long long int readyTime, long long int blockedTime, long long int idleTime) {
-   printf("**********************PROGRAM SUMMARY**********************\n\n");
-   printf("Total processes launched:                          %d\n", processes);
-   printf("Average process wait time ('ready' state):         %.4f s\n", getAverageReadyStateTime(readyTime, processes));
-   printf("Average process wait time ('blocked' state):       %.4f s\n", getAverageBlockedStateTime(blockedTime, processes));
-   printf("Average CPU utilization:                           %.2f%% \n", getUtilizationOfCPU(idleTime));
-   printf("Total CPU idle time:                               %.4f s\n", getTotalIdleTime(idleTime));
-
-   printf("\n\n");
-   printf("***********************************************************\n\n");
+	printf("**********************PROGRAM SUMMARY**********************\n\n");
+	printf("Total processes launched:                          %d\n", processes);
+	printf("Average process wait time ('ready' state):         %.4f s\n", getAverageReadyStateTime(readyTime, processes));
+	printf("Average process wait time ('blocked' state):       %.4f s\n", getAverageBlockedStateTime(blockedTime, processes));
+	printf("Average CPU utilization:                           %.2f%% \n", getUtilizationOfCPU(idleTime));
+	printf("Total CPU idle time:                               %.4f s\n", getTotalIdleTime(idleTime));
+	
+	printf("\n\n");
+	printf("***********************************************************\n\n");
 }
 
 // Gracefully terminates program after a function error or use of CTRL + C.
 void periodicallyTerminateProgram(int signal) {
-   printf("Now terminating all child processes...\n");
-
-   int i;
-   for (i = 0; i < 20; i++) {
-      if (processTable[i].occupied == 1) {
-         pid_t processID = processTable[i].processID;
-
-         if (processID > 0) {
-            kill(processTable[i].processID, SIGTERM);
-
-            printf("Signal SIGTERM was sent to PID %d\n", processID);
-         }
-      }
-   }
-   printf("\nChild process termination complete.\n");
-
-   // Shared memory operations.
-   printf("Now freeing shared memory...\n");
-   detachAndClearSharedMemory();
-   printf("\nShared memory detachment and deletion complete.\n");
-
-   // Queue removal operations.
-   printf("Now deleting the message queue...\n");
-   removeMessageQueue();
-   printf("\nMessage queue removal and deletion complete.\n");
-
-   // Graceful termination.
-   printf("Now exiting program...\n\n");
-
-
-   exit(0);
+	printf("Now terminating all child processes...\n");
+	
+	int i;
+	for (i = 0; i < 20; i++) {
+		if (processTable[i].occupied == 1) {
+			pid_t processID = processTable[i].processID;
+			
+			if (processID > 0) {
+				kill(processTable[i].processID, SIGTERM);
+				printf("Signal SIGTERM was sent to PID %d\n", processID);
+			}
+		}
+	}
+	printf("\nChild process termination complete.\n");
+	
+	// Shared memory operations.
+	printf("Now freeing shared memory...\n");
+	detachAndClearSharedMemory();
+	printf("\nShared memory detachment and deletion complete.\n");
+	
+	// Queue removal operations.
+	printf("Now deleting the message queue...\n");
+	removeMessageQueue();
+	printf("\nMessage queue removal and deletion complete.\n");
+	
+	// Graceful termination.
+	printf("Now exiting program...\n\n");
+	
+	
+	exit(0);
 }
