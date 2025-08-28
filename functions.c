@@ -340,38 +340,28 @@ void removeFromProcessTable(pid_t pid) {
 void printProcessTable() {
 	printf("\nOSS PID: %d  SysClockS: %d  SysClockNano: %lld\n", getpid(), systemClockSeconds, systemClockNano);
 	printf("Process Table:\n");
-	printf("Entry\t Occupied\t PID\t\t StartS\t StartN\t\t ServiceS\t ServiceN\t EventWaitS\t EventWaitN\t Blocked\n");
+	
+	printf("%-9s %-12s %-10s %-10s %-14s", "Entry", "Occupied", "PID", "StartS", "StartN"); 
+	printf("%-12s %-13s %-13s %-17s %s\n", "ServiceS", "ServiceN", "EventWaitS", "EventWaitN", "Blocked");
 	
 	int i;
+	
 	for (i = 0; i < 20; i++) {
 		// Prints first 3 columns (Entry, Occupied, PID).
-		printf("%d\t %d\t\t %d\t", i, processTable[i].occupied, processTable[i].processID);
-		if (processTable[i].processID == 0) {
-			printf("\t");
-		}
+		printf("%-9d %-12d %-11d", i, processTable[i].occupied, processTable[i].processID);
 		
 		// Prints columns 4 and 5 (StartS, StartN).
-		printf(" %d\t %ld\t", processTable[i].startSeconds, processTable[i].startNanoseconds);
-		if (processTable[i].startNanoseconds < 1000000) {
-			printf("\t");
-		}
+		printf("%-10d %-14ld", processTable[i].startSeconds, processTable[i].startNanoseconds);
 		
 		// Prints columns 6 and 7 (ServiceS, ServiceN).
-		printf(" %d\t\t %ld\t", processTable[i].serviceTimeSeconds, processTable[i].serviceTimeNanoseconds);
-		if (processTable[i].serviceTimeNanoseconds < 1000000) {
-			printf("\t");
-		}
+		printf("%-12d %-14ld", processTable[i].serviceTimeSeconds, processTable[i].serviceTimeNanoseconds);
 		
 		// Prints columns 8 and 9 (EventWaitS, EventWaitN).
-		printf(" %d\t\t %lld\t", processTable[i].eventWaitSeconds, processTable[i].eventWaitNanoseconds);
-		if (processTable[i].eventWaitNanoseconds < 1000000) {
-			printf("\t");
-		}
+		printf("%-13d %-18lld", processTable[i].eventWaitSeconds, processTable[i].eventWaitNanoseconds);
 		
-		// Prints column 10 (Blocked--the final column).
-		printf(" %d\n", processTable[i].blocked);
+		// Prints column 10 (Blocked).
+		printf("%-7d\n", processTable[i].blocked);
 	}
-	printf("\n");
 	printProcessTableToLogfile();
 }
 
@@ -379,38 +369,28 @@ void printProcessTableToLogfile() {
 	fprintf(logOutputFP, "OSS: Outputting process table:\n");
 	fprintf(logOutputFP, "\nOSS PID: %d  SysClockS: %d  SysClockNano: %lld\n", getpid(), systemClockSeconds, systemClockNano);
 	fprintf(logOutputFP, "Process Table:\n");
-	fprintf(logOutputFP, "Entry\t Occupied\t PID\t\t StartS\t StartN\t\t ServiceS\t ServiceN\t EventWaitS\t EventWaitN\t Blocked\n");
-
+	
+	fprintf(logOutputFP, "%-9s %-12s %-10s %-10s %-14s", "Entry", "Occupied", "PID", "StartS", "StartN"); 
+	fprintf(logOutputFP, "%-12s %-13s %-13s %-17s %s\n", "ServiceS", "ServiceN", "EventWaitS", "EventWaitN", "Blocked");
+	
 	int i;
+	
 	for (i = 0; i < 20; i++) {
 		// Prints first 3 columns (Entry, Occupied, PID).
-		fprintf(logOutputFP, "%d\t %d\t\t %d\t", i, processTable[i].occupied, processTable[i].processID);
-		if (processTable[i].processID == 0) {
-			fprintf(logOutputFP, "\t");
-		}
+		printf("%-9d %-12d %-11d", i, processTable[i].occupied, processTable[i].processID);
 		
 		// Prints columns 4 and 5 (StartS, StartN).
-		fprintf(logOutputFP, " %d\t %ld\t", processTable[i].startSeconds, processTable[i].startNanoseconds);
-		if (processTable[i].startNanoseconds < 1000000) {
- 			fprintf(logOutputFP, "\t");
-		}
+		printf("%-10d %-14ld", processTable[i].startSeconds, processTable[i].startNanoseconds);
 		
 		// Prints columns 6 and 7 (ServiceS, ServiceN).
-		fprintf(logOutputFP, " %d\t\t %ld\t", processTable[i].serviceTimeSeconds, processTable[i].serviceTimeNanoseconds);
-		if (processTable[i].serviceTimeNanoseconds < 1000000) {
-			fprintf(logOutputFP, "\t");
-		}
+		printf("%-12d %-14ld", processTable[i].serviceTimeSeconds, processTable[i].serviceTimeNanoseconds);
 		
 		// Prints columns 8 and 9 (EventWaitS, EventWaitN).
-		fprintf(logOutputFP, " %d\t\t %lld\t", processTable[i].eventWaitSeconds, processTable[i].eventWaitNanoseconds);
-		if (processTable[i].eventWaitNanoseconds < 1000000) {
-			fprintf(logOutputFP, "\t");
-		}
+		printf("%-13d %-18lld", processTable[i].eventWaitSeconds, processTable[i].eventWaitNanoseconds);
 		
-		// Prints column 10 (Blocked--the final column).
-		fprintf(logOutputFP, " %d\n", processTable[i].blocked);
+		// Prints column 10 (Blocked).
+		printf("%-7d\n", processTable[i].blocked);
 	}
-	fprintf(logOutputFP, "\n");
 }
 
 /********************************************MESSAGE PASSING OPERATIONS************************************************/
