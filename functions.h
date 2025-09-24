@@ -11,7 +11,6 @@
 #include <signal.h>
 #include <time.h>
 
-
 // For process table.
 #define PROCESS_COUNT 20
 
