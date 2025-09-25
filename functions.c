@@ -377,19 +377,19 @@ void printProcessTableToLogfile() {
 	
 	for (i = 0; i < 20; i++) {
 		// Prints first 3 columns (Entry, Occupied, PID).
-		printf("%-9d %-12d %-11d", i, processTable[i].occupied, processTable[i].processID);
+		fprintf(logOutputFP, "%-9d %-12d %-11d", i, processTable[i].occupied, processTable[i].processID);
 		
 		// Prints columns 4 and 5 (StartS, StartN).
-		printf("%-10d %-14ld", processTable[i].startSeconds, processTable[i].startNanoseconds);
+		fprintf(logOutputFP, "%-10d %-14ld", processTable[i].startSeconds, processTable[i].startNanoseconds);
 		
 		// Prints columns 6 and 7 (ServiceS, ServiceN).
-		printf("%-12d %-14ld", processTable[i].serviceTimeSeconds, processTable[i].serviceTimeNanoseconds);
+		fprintf(logOutputFP, "%-12d %-14ld", processTable[i].serviceTimeSeconds, processTable[i].serviceTimeNanoseconds);
 		
 		// Prints columns 8 and 9 (EventWaitS, EventWaitN).
-		printf("%-13d %-18lld", processTable[i].eventWaitSeconds, processTable[i].eventWaitNanoseconds);
+		fprintf(logOutputFP, "%-13d %-18lld", processTable[i].eventWaitSeconds, processTable[i].eventWaitNanoseconds);
 		
 		// Prints column 10 (Blocked).
-		printf("%-7d\n", processTable[i].blocked);
+		fprintf(logOutputFP, "%-7d\n", processTable[i].blocked);
 	}
 }
 
