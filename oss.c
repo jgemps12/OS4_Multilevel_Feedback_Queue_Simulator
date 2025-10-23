@@ -416,7 +416,6 @@ int main(int argc, char** argv) {
 							fprintf(logOutputFP, "After termination: \n");
 
 							printAllFeedbackQueues(queue, false);
-							sleep(1);
 						}
 						
 						idleStartTime = systemNanoOnly;
