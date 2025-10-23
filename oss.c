@@ -193,7 +193,7 @@ int main(int argc, char** argv) {
 				long long int lastTablePrintout = (lastTablePrintSeconds * oneBillionNanoseconds) + lastTablePrintNano;
 				
 				if (systemNanoOnly - lastTablePrintout >= halfBillionNanoseconds) { 		   
-					printAllFeedbackQueues(queue);
+					printAllFeedbackQueues(queue, true);
 					printProcessTable();
 				
 					lastTablePrintSeconds = systemClockSeconds;
@@ -269,13 +269,18 @@ int main(int argc, char** argv) {
 					printf("ERROR in oss.c: Process Control Block (PCB) table is full.\n");
 					printf("Cannot add PID %d\n", processID);
 				}
-				
+/*				
 				printf("++OSS: Generating process with PID %d and putting it in queue 0 ", processID);
 				printf("at time %d:%lld\n\n", systemClockSeconds, systemClockNano);
 				fprintf(logOutputFP, "++OSS: Generating process with PID %d and putting it in queue 0 ", processID);
 				fprintf(logOutputFP, "at time %d:%lld\n\n", systemClockSeconds, systemClockNano);
-				
+
+				sleep(2);
+*/
+				printEventMessage(GENERATE_PROCESS, -1, -1, processID, -1, -1, -1);
+//				sleep(2);				
 				enqueue(&queue[queueLevel], processID);
+				printAllFeedbackQueues(queue, false);				
 				
 				nextChild = findIndexInProcessTable(processDispatchedNext);
 			}
@@ -311,7 +316,7 @@ int main(int argc, char** argv) {
 			long long int lastPrintoutTime = (lastTablePrintSeconds * oneBillionNanoseconds) + lastTablePrintNano;
 			
 			if (systemNanoOnly - lastPrintoutTime >= halfBillionNanoseconds) {	    
-				printAllFeedbackQueues(queue);
+				printAllFeedbackQueues(queue, true);
 				printProcessTable();
 				lastTablePrintSeconds = systemClockSeconds;
 				lastTablePrintNano = systemClockNano;
@@ -346,7 +351,7 @@ int main(int argc, char** argv) {
 				
 				if (processDispatchedNext >= 0) {	
 					processDispatchedNext = sendBuffer.messageType;
-					
+/*					
 					printf("OSS: Dispatching process with PID %ld from queue %d ", sendBuffer.messageType, queueLevel); 
 					printf("at time %d:%lld\n", systemClockSeconds, systemClockNano);
 					printf("OSS: Total time spent in dispatch was %d nanoseconds\n", dispatchTime);
@@ -354,7 +359,11 @@ int main(int argc, char** argv) {
 					fprintf(logOutputFP, "at time %d:%lld\n", systemClockSeconds, systemClockNano);
 					fprintf(logOutputFP, "OSS: Total time spent in dispatch was %d nanoseconds\n", dispatchTime);
 					fflush(logOutputFP);
-					
+					sleep(1); 
+*/
+					printEventMessage(DISPATCH_PROCESS, -1, -1, processDispatchedNext, -1, queueLevel, dispatchTime);
+//					sleep(1);
+										
 					// Slow down program to prevent race conditions between times in Process Table and those analyzed in user.c.
 					// Also prevents multiple empty Process Tables from printing towards the program's end.
 					int i; 
@@ -374,21 +383,31 @@ int main(int argc, char** argv) {
 					systemClockIncrement = incrementClock(&systemClockSeconds, &systemClockNano, absoluteValueQuantData);	     
 					
 					// Prints duration of time that a process was scheduled.
-					printf("OSS: Receiving that process with PID %ld ran for %ld nanoseconds\n", sendBuffer.messageType, receiveBuffer.quantumData);
+/*					printf("OSS: Receiving that process with PID %ld ran for %ld nanoseconds\n", sendBuffer.messageType, receiveBuffer.quantumData);
 					fprintf(logOutputFP, "OSS: Receiving that process with PID %ld ran for %ld nanoseconds\n", receiveBuffer.messageType, receiveBuffer.quantumData);
-					
+					sleep(1);
+*/		
+					printEventMessage(RUN_PROCESS, -1, -1, sendBuffer.messageType, receiveBuffer.quantumData, -1, -1);
+//					sleep(1);
+				
 					// If user.c passes back a partial time quantum, send blocked process to BLOCKED queue.
 					if (sendBuffer.quantumData != receiveBuffer.quantumData && receiveBuffer.quantumData > 0) {
-						printf("**OSS: Did not use its entire time quantum**\n");
-						fprintf(logOutputFP, "**OSS: Did not use its entire time quantum**\n");
+//						printf("**OSS: Did not use its entire time quantum**\n");
+//						fprintf(logOutputFP, "**OSS: Did not use its entire time quantum**\n");
 						
 						dequeue(&queue[queueLevel]);
 						slowDownProgram();
 						enqueue(&queue[BLOCKED], receiveBuffer.messageType);
-						
+
+/*						printf("**OSS: Did not use its entire time quantum**\n");
+                  fprintf(logOutputFP, "**OSS: Did not use its entire time quantum**\n");						
 						printf("OSS: Putting process with PID %ld into blocked queue.\n", receiveBuffer.messageType);
 						fprintf(logOutputFP, "OSS: Putting process with PID %ld into blocked queue.\n", receiveBuffer.messageType);
-						
+						sleep(1);					
+*/
+						printEventMessage(FULL_QUANTUM_NOT_USED, BLOCK_PROCESS, -1, receiveBuffer.messageType, -1, -1, -1);
+//						sleep(1);
+	
 						processTable[nextChild].blocked = 1;
 						
 						// Add accumulating schedule time info to the process table.
@@ -416,21 +435,33 @@ int main(int argc, char** argv) {
 					if (sendBuffer.quantumData != receiveBuffer.quantumData && receiveBuffer.quantumData < 0) {
 						pid_t pid;
 						
-						printf("**OSS: Did not use its entire time quantum**\n");
-						fprintf(logOutputFP, "**OSS: Did not use its entire time quantum**\n");
+	//					printf("**OSS: Did not use its entire time quantum**\n");
+	//					fprintf(logOutputFP, "**OSS: Did not use its entire time quantum**\n");
 						
 						readyStateTime += calculateReadyStateTime(systemNanoOnly, nextChild);	  
 						removeFromProcessTable(sendBuffer.messageType);
-						
+/*	
+						printf("**OSS: Did not use its entire time quantum**\n");
+                  fprintf(logOutputFP, "**OSS: Did not use its entire time quantum**\n");
 						printf("---OSS: User #%d PID %ld is planning to terminate.---\n\n", nextChild, sendBuffer.messageType);
 						fprintf(logOutputFP, "---OSS: User #%d PID %ld is planning to terminate.---\n\n", nextChild, sendBuffer.messageType);
-						
+						sleep(1);
+*/					
+						printEventMessage(FULL_QUANTUM_NOT_USED, TERMINATE_PROCESS, nextChild, receiveBuffer.messageType, -1, -1, -1);
+//`:						sleep(1);
+					
 						// Delete process from whatever queue it was in before terminating.
 						if (isQueueEmpty(&queue[queueLevel]) == false) {
-							printAllFeedbackQueues(queue);
+							printf("Before termination: \n");
+							fprintf(logOutputFP, "Before termination: \n");
+							printAllFeedbackQueues(queue, false);
 							dequeue(&queue[queueLevel]);
-							
-							printAllFeedbackQueues(queue);
+
+							printf("After termination: \n");
+							fprintf(logOutputFP, "After termination: \n");
+
+							printAllFeedbackQueues(queue, false);
+							sleep(1);
 						}
 						
 						idleStartTime = systemNanoOnly;
@@ -456,7 +487,7 @@ int main(int argc, char** argv) {
 					// Move process to a lower priority queue.   
 					if (queueLevel < LOW_PRIORITY) {
 						enqueue(&queue[++queueLevel], processDispatchedNext);
-						printAllFeedbackQueues(queue);
+						printAllFeedbackQueues(queue, false);
 					}
 					
 					// After process runs in low priority queue, place in the back of it.
@@ -528,7 +559,6 @@ int main(int argc, char** argv) {
 		} 
 	}
 	
-	printAllFeedbackQueues(queue);
 	printProcessTable();  
 	fclose(logOutputFP);
 	detachAndClearSharedMemory();
