@@ -93,13 +93,21 @@ pid_t peekQueue(MultiLevelQueue *queue) {
 	return -1;
 }
 
-void printAllFeedbackQueues(MultiLevelQueue queue[]) {
+void printAllFeedbackQueues(MultiLevelQueue queue[], bool halfSecondPassed) {
 	int i;
+	
+	if (halfSecondPassed == true) {
+		printf("\nOSS PID: %d  SysClockS: %d  SysClockNano: %lld\n", getpid(), systemClockSeconds, systemClockNano);
+		printf("Feedback queue:\n");		
+		fprintf(logOutputFP, "OSS: Outputting feedback queue:\n");
+		fprintf(logOutputFP, "\nOSS PID: %d  SysClockS: %d  SysClockNano: %lld\n", getpid(), systemClockSeconds, systemClockNano);
+		fprintf(logOutputFP, "Feedback queue:\n");
+	}
+	
 	for (i = 0; i < QUEUE_COUNT; i++) {
-		printf("Queue %d: ", i);
-    	fprintf(logOutputFP, "Queue %d: ", i);
-
-    	printOneQueue(&queue[i]);
+		printf("     Queue %d: ", i);
+		fprintf(logOutputFP, "     Queue %d: ", i);
+		printOneQueue(&queue[i]);
 	}
 	printf("\n");
 	fprintf(logOutputFP, "\n");
@@ -412,7 +420,7 @@ void receiveMessageFromUSER(int i) {
 	}
 }
 
-/***************************************************USER GUIDANCE******************************************************/
+/*************************************************OUTPUT OPERATIONS****************************************************/
 // Displays a help message if user enters './oss -h'.
 void printHelpMessage() {
 	printf("\n\n\nThis program displays information about child and parent processes, including:\n");
@@ -430,6 +438,40 @@ void printHelpMessage() {
 	printf("\t1.) while storing message statuses inside a file called 'storage.txt'.\n\n\n");
 	
 	exit(0);
+}
+
+void printEventMessage(int event, int secondEvent, int childNumber, int pid, long int runTime, int queueLevel, int dispatchTime) {
+	if (event == GENERATE_PROCESS) {
+		printf("++OSS: Generating process with PID %d and putting it in queue 0 at time %d:%lld\n", pid, systemClockSeconds, systemClockNano);
+		fprintf(logOutputFP, "++OSS: Generating process with PID %d and putting it in queue 0 at time %d:%lld\n", pid, systemClockSeconds, systemClockNano);
+	}
+	
+	else if (event == DISPATCH_PROCESS) {
+		printf("OSS: Dispatching process with PID %d from queue %d at time %d:%lld\n", pid, queueLevel, systemClockSeconds, systemClockNano);
+		printf("OSS: Total time spent in dispatch was %d nanoseconds\n", dispatchTime);
+		fprintf(logOutputFP, "OSS: Dispatching process with PID %d from queue %d at time %d:%lld\n", pid, queueLevel, systemClockSeconds, systemClockNano);
+		fprintf(logOutputFP, "OSS: Total time spent in dispatch was %d nanoseconds\n", dispatchTime);
+	}
+	
+	else if (event == RUN_PROCESS) {
+		printf("OSS: Receiving that process with PID %d ran for %ld nanoseconds\n", pid, runTime);
+		fprintf(logOutputFP, "OSS: Receiving that process with PID %d ran for %ld nanoseconds\n", pid, runTime);
+	}
+	
+	else if (event == FULL_QUANTUM_NOT_USED) {
+		printf("**OSS: Did not use its entire time quantum**\n");
+		fprintf(logOutputFP, "**OSS: Did not use its entire time quantum**\n");
+		
+		if (secondEvent == BLOCK_PROCESS) {
+			printf("OSS: Putting process with PID %d into blocked queue.\n", pid);
+			fprintf(logOutputFP, "OSS: Putting process with PID %d into blocked queue.\n", pid);
+		}
+		
+		else if (secondEvent == TERMINATE_PROCESS) {
+			printf("---OSS: User #%d PID %d is planning to terminate.---\n\n", childNumber, pid);
+			fprintf(logOutputFP, "---OSS: User #%d PID %d is planning to terminate.---\n\n", childNumber, pid);
+		}
+	}
 }
 
 /**************************************************PROGRAM STATISTICS**************************************************/
