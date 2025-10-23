@@ -51,6 +51,16 @@ enum Level {
    BLOCKED
 };
 
+// Enumerates events that occur in the program for printing output.
+enum EventOutput {
+	GENERATE_PROCESS,
+	DISPATCH_PROCESS,
+	RUN_PROCESS,
+	BLOCK_PROCESS,
+	TERMINATE_PROCESS,
+	FULL_QUANTUM_NOT_USED
+};
+
 // Holds message queue information.
 typedef struct messageBuffer {
    long int messageType;
@@ -111,7 +121,7 @@ bool isQueueEmpty(MultiLevelQueue *);
 void enqueue(MultiLevelQueue *, pid_t);
 pid_t dequeue(MultiLevelQueue *);
 pid_t peekQueue(MultiLevelQueue *);
-void printAllFeedbackQueues(MultiLevelQueue *);
+void printAllFeedbackQueues(MultiLevelQueue *, bool);
 void printOneQueue(MultiLevelQueue *);
 
 // For system clock/time operations.
@@ -138,8 +148,9 @@ void printProcessTableToLogfile();
 void sendMessageToUSER();
 void receiveMessageFromUSER(int);
 
-// For guiding the user.
+// For output printout.
 void printHelpMessage();
+void printEventMessage(int, int, int, int, long int, int, int);
 
 // For program statistics operations.
 long long int calculateReadyStateTime(long long int, int);
