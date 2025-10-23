@@ -445,19 +445,16 @@ void printEventMessage(int event, int secondEvent, int childNumber, int pid, lon
 		printf("++OSS: Generating process with PID %d and putting it in queue 0 at time %d:%lld\n", pid, systemClockSeconds, systemClockNano);
 		fprintf(logOutputFP, "++OSS: Generating process with PID %d and putting it in queue 0 at time %d:%lld\n", pid, systemClockSeconds, systemClockNano);
 	}
-	
 	else if (event == DISPATCH_PROCESS) {
 		printf("OSS: Dispatching process with PID %d from queue %d at time %d:%lld\n", pid, queueLevel, systemClockSeconds, systemClockNano);
 		printf("OSS: Total time spent in dispatch was %d nanoseconds\n", dispatchTime);
 		fprintf(logOutputFP, "OSS: Dispatching process with PID %d from queue %d at time %d:%lld\n", pid, queueLevel, systemClockSeconds, systemClockNano);
 		fprintf(logOutputFP, "OSS: Total time spent in dispatch was %d nanoseconds\n", dispatchTime);
 	}
-	
 	else if (event == RUN_PROCESS) {
 		printf("OSS: Receiving that process with PID %d ran for %ld nanoseconds\n", pid, runTime);
 		fprintf(logOutputFP, "OSS: Receiving that process with PID %d ran for %ld nanoseconds\n", pid, runTime);
 	}
-	
 	else if (event == FULL_QUANTUM_NOT_USED) {
 		printf("**OSS: Did not use its entire time quantum**\n");
 		fprintf(logOutputFP, "**OSS: Did not use its entire time quantum**\n");
@@ -465,8 +462,7 @@ void printEventMessage(int event, int secondEvent, int childNumber, int pid, lon
 		if (secondEvent == BLOCK_PROCESS) {
 			printf("OSS: Putting process with PID %d into blocked queue.\n", pid);
 			fprintf(logOutputFP, "OSS: Putting process with PID %d into blocked queue.\n", pid);
-		}
-		
+		}		
 		else if (secondEvent == TERMINATE_PROCESS) {
 			printf("---OSS: User #%d PID %d is planning to terminate.---\n\n", childNumber, pid);
 			fprintf(logOutputFP, "---OSS: User #%d PID %d is planning to terminate.---\n\n", childNumber, pid);
