@@ -283,7 +283,7 @@ A full Process Table contains 20 rows, one for each child process slot.
 - Implemented a probability function to determine the fate of child processes, including termination and blocking.
 - Enforced times on the quantity and concurrency of processes running in the system.
 - Provided clear output and visualization on all events that occur during system runtime.
-- 
+  
 ## Tested On:
 - Ubuntu 20.04.6 (LTS)
 - GCC 10.5.0
