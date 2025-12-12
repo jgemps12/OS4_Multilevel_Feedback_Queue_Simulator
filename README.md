@@ -278,7 +278,12 @@ A full Process Table contains 20 rows, one for each child process slot.
 - **Blocked** - is the process blocked? (**1** if *yes*; **0** if *no*)
   
 ## Skills Learned:
-
+- Applied message queues to facilitate scheduling, runtimes, blocking, and termination of child processes.
+- Implemented a Multilevel Feedback Queue (MLFQ) to control the order and timeframes of child process execution.
+- Implemented a probability function to determine the fate of child processes, including termination and blocking.
+- Enforced times on the quantity and concurrency of processes running in the system.
+- Provided clear output and visualization on all events that occur during system runtime.
+- 
 ## Tested On:
 - Ubuntu 20.04.6 (LTS)
 - GCC 10.5.0
