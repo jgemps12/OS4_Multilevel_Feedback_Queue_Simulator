@@ -123,10 +123,10 @@ This table below may help the user understand how and when child processes launc
 ## Example Output:
 ### Example 1: Console and Log File Output
 #### i.) Program Initialization:
-The program initializes by using **fork()** to launch a process with PID **916494**, whihch is launched after `304,289,380` nanoseconds of system runtime. The PID becomes placed inside of Queue 0 (the **high-priority** queue) as shown below:
+The program initializes by using **fork()** to launch a process with PID **919633**, whihch is launched after `304,289,380` nanoseconds of system runtime. The PID becomes placed inside of Queue 0 (the **high-priority** queue) as shown below:
 
 ```bash
-++OSS: Generating process with PID 916494 and putting it in queue 0 at time 0:304289380
+++OSS: Generating process with PID 919633 and putting it in queue 0 at time 0:304289380
      Queue 0: 916494
      Queue 1: (empty)
      Queue 2: (empty)
@@ -163,12 +163,13 @@ OSS: Receiving that process with PID 919633 ran for 20000000 nanoseconds
      Queue 3: (empty)
 ```
 
-Since PID **919633** is already in the low-priority queue, it will stay there and attempt to run the entire `40,000,000` nanosecond time quantum. It will continue to do so until the worker decides that the child should be blocked or terminated. This is expressed by the repetitive output shown below:
+Since PID **919633** is already in the low-priority queue, it will stay there and attempt to run the entire `40,000,000` nanosecond time quantum. It will continue to do so until the worker decides that the child should be *blocked* or *terminated*. This is expressed by the repetitive output shown below:
 
  ```bash
 OSS: Dispatching process with PID 919633 from queue 2 at time 0:334305035
 OSS: Total time spent in dispatch was 4290 nanoseconds
 OSS: Receiving that process with PID 919633 ran for 40000000 nanoseconds
+
 OSS: Dispatching process with PID 919633 from queue 2 at time 0:374309238
 OSS: Total time spent in dispatch was 4203 nanoseconds
 OSS: Receiving that process with PID 919633 ran for 40000000 nanoseconds
@@ -181,11 +182,12 @@ In this example below, another process with PID **919636** becomes blocked. Noti
 OSS: Dispatching process with PID 919636 from queue 2 at time 1:745810287
 OSS: Total time spent in dispatch was 4673 nanoseconds
 OSS: Receiving that process with PID 919636 ran for 6400000 nanoseconds
+
 **OSS: Did not use its entire time quantum**
 OSS: Putting process with PID 919636 into blocked queue.
 ```
  #### iv.) Process Unblocking:
-For the child process with PID **919636**, the PCB table below states that the **event wait time** is `2` seconds, `165210287` nanoseconds.
+For the child process with PID **919636**, the PCB table below states that the **event wait time** is `2` seconds, `165,210,287` nanoseconds.
 
 ```bash
 Process Table:
@@ -204,12 +206,13 @@ OSS: Receiving that process with PID 919636 ran for 10000000 nanoseconds
 ```
 
 #### v.) Process Termination:
-As shown below, a process with PID **919635** currently resides in Queue 2 (the low-priority queue). For a complete time quantum runtime, this process must run for 40,000,000 nanoseconds. The output below states that PID **919635** ran for `-7,600,000` nanoseconds. Not only is the value below the expected time quantum, it is also a *negative number*. Every time the worker sends a *negative* runtime value back to OSS, OSS must **terminate** the process with a call to **waitpid()**.
+As shown below, a process with PID **919635** currently resides in Queue 2 (the low-priority queue). For a complete time quantum runtime, this process must run for 40,000,000 nanoseconds. The output below states that PID **919635** ran for `-7,600,000` nanoseconds. Not only is the value below the expected time quantum, it is also a *negative number*. Every time the worker sends a *negative* runtime value back to OSS, the process must **terminate** with a call to **waitpid()**.
 
 ```bash
 OSS: Dispatching process with PID 919635 from queue 2 at time 1:832230261
 OSS: Total time spent in dispatch was 5746 nanoseconds
 OSS: Receiving that process with PID 919635 ran for -7600000 nanoseconds
+
 **OSS: Did not use its entire time quantum**
 ---OSS: User #2 PID 919635 is planning to terminate.---
 
