@@ -123,7 +123,7 @@ This table below may help the user understand how and when child processes launc
 ## Example Output:
 ### Example 1: Console and Log File Output
 #### i.) Program Initialization:
-The program initializes by using **fork()** to launch a process with PID **919633**, whihch is launched after `304,289,380` nanoseconds of system runtime. The PID becomes placed inside of Queue 0 (the **high-priority** queue) as shown below:
+The program initializes by using **fork()** to launch a process with PID **919633**, which is launched after `304,289,380` nanoseconds of system runtime. The PID becomes placed inside of Queue 0 (the **high-priority** queue) as shown below:
 
 ```bash
 ++OSS: Generating process with PID 919633 and putting it in queue 0 at time 0:304289380
